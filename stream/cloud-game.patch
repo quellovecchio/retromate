@@ -1,0 +1,1081 @@
+diff --git a/pkg/api/api.go b/pkg/api/api.go
+index 8b9a17c..a3e0348 100644
+--- a/pkg/api/api.go
++++ b/pkg/api/api.go
+@@ -80,6 +80,9 @@ const (
+ 	GetWorkerList    PT = 111
+ 	ErrNoFreeSlots   PT = 112
+ 	ResetGame        PT = 113
++	PauseGame        PT = 114 // RetroMate: freeze/resume the emulation (the in-game menu)
++	GetOptions       PT = 115 // RetroMate: the running core's options (the in-game menu)
++	SetOption        PT = 116 // RetroMate: change one of them
+ 	RegisterRoom     PT = 201
+ 	CloseRoom        PT = 202
+ 	TerminateSession PT = 204
+@@ -116,6 +119,12 @@ func (p PT) String() string {
+ 		return "NoFreeSlots"
+ 	case ResetGame:
+ 		return "ResetGame"
++	case PauseGame:
++		return "PauseGame"
++	case GetOptions:
++		return "GetOptions"
++	case SetOption:
++		return "SetOption"
+ 	case RegisterRoom:
+ 		return "RegisterRoom"
+ 	case CloseRoom:
+diff --git a/pkg/api/user.go b/pkg/api/user.go
+index 2ce4fde..c526425 100644
+--- a/pkg/api/user.go
++++ b/pkg/api/user.go
+@@ -1,5 +1,16 @@
+ package api
+ 
++// StateUserRequest is the optional payload of a user's SaveGame/LoadGame: the state's name (RetroMate).
++type StateUserRequest struct {
++	Name string `json:"name"`
++}
++
++// OptionUserRequest is a user's SetOption: a core option and its new value (RetroMate).
++type OptionUserRequest struct {
++	Key   string `json:"key"`
++	Value string `json:"value"`
++}
++
+ type (
+ 	ChangePlayerUserRequest  int
+ 	CheckLatencyUserResponse []string
+@@ -10,6 +21,9 @@ type (
+ 		RecordUser  string `json:"record_user,omitempty"`
+ 		PlayerIndex int    `json:"player_index"`
+ 		Record      bool   `json:"record,omitempty"`
++		// RetroMate: per-launch core option values (any option the core declares), and port 1's device as
++		// "retromate_device" (nanoarch.DeviceKey)
++		Options map[string]string `json:"options,omitempty"`
+ 	}
+ 	GameStartUserResponse struct {
+ 		Av      *AppVideoInfo `json:"av"`
+diff --git a/pkg/api/worker.go b/pkg/api/worker.go
+index d8c7324..6ac47b5 100644
+--- a/pkg/api/worker.go
++++ b/pkg/api/worker.go
+@@ -7,11 +7,27 @@ type (
+ 	}
+ 	ChangePlayerResponse int
+ 	GameQuitRequest      StatefulRoom
+-	LoadGameRequest      StatefulRoom
++	LoadGameRequest      struct { // RetroMate: Name picks a state in library/states (empty: cloud-game's own slot)
++		StatefulRoom
++		Name string `json:"name,omitempty"`
++	}
+ 	LoadGameResponse     string
+ 	ResetGameRequest     StatefulRoom
++	PauseGameRequest     struct { // RetroMate
++		StatefulRoom
++		Paused bool `json:"paused"`
++	}
++	GetOptionsRequest StatefulRoom // RetroMate: answered with the core's options (nanoarch.CoreOptions)
++	SetOptionRequest  struct {     // RetroMate: answered "ok" or "err"
++		StatefulRoom
++		Key   string `json:"key"`
++		Value string `json:"value"`
++	}
+ 	ResetGameResponse    string
+-	SaveGameRequest      StatefulRoom
++	SaveGameRequest      struct { // RetroMate: Name saves a new state in library/states (empty: cloud-game's own slot)
++		StatefulRoom
++		Name string `json:"name,omitempty"`
++	}
+ 	SaveGameResponse     string
+ 	StartGameRequest     struct {
+ 		StatefulRoom
+@@ -19,6 +35,7 @@ type (
+ 		RecordUser  string
+ 		Game        string `json:"game"`
+ 		PlayerIndex int    `json:"player_index"`
++		Options     map[string]string `json:"options,omitempty"` // RetroMate: see GameStartUserRequest
+ 	}
+ 	GameInfo struct {
+ 		Alias  string `json:"alias"`
+diff --git a/pkg/coordinator/user.go b/pkg/coordinator/user.go
+index d11b144..f226a6f 100644
+--- a/pkg/coordinator/user.go
++++ b/pkg/coordinator/user.go
+@@ -55,13 +55,19 @@ func (u *User) HandleRequests(info HasServerInfo, conf config.CoordinatorConfig)
+ 		case api.QuitGame:
+ 			err = api.Do(x, u.HandleQuitGame)
+ 		case api.SaveGame:
+-			err = u.HandleSaveGame()
++			err = u.HandleSaveGame(api.Unwrap[api.StateUserRequest](x.Payload))
+ 		case api.LoadGame:
+-			err = u.HandleLoadGame()
++			err = u.HandleLoadGame(api.Unwrap[api.StateUserRequest](x.Payload))
+ 		case api.ChangePlayer:
+ 			err = api.Do(x, u.HandleChangePlayer)
+ 		case api.ResetGame:
+ 			err = api.Do(x, u.HandleResetGame)
++		case api.PauseGame:
++			err = api.Do(x, u.HandlePauseGame)
++		case api.GetOptions:
++			err = u.HandleGetOptions()
++		case api.SetOption:
++			err = api.DoE(x, u.HandleSetOption)
+ 		case api.RecordGame:
+ 			if !conf.Recording.Enabled {
+ 				return api.ErrForbidden
+diff --git a/pkg/coordinator/userhandlers.go b/pkg/coordinator/userhandlers.go
+index 51e805c..36d3fa3 100644
+--- a/pkg/coordinator/userhandlers.go
++++ b/pkg/coordinator/userhandlers.go
+@@ -77,12 +77,20 @@ func (u *User) HandleStartGame(rq api.GameStartUserRequest, conf config.Coordina
+ 	}
+ 
+ 	startGameResp, err := u.w.StartGame(u.Id().String(), rq)
++	// The game didn't start (e.g. a ROM the core can't load): give back the slot reserved above,
++	// otherwise the worker stays "busy" with no room until it reconnects.
+ 	if err != nil || startGameResp == nil {
+ 		u.log.Error().Err(err).Msg("malformed game start response")
++		if !busy {
++			u.w.UnReserve()
++		}
+ 		return
+ 	}
+ 	if startGameResp.Rid == "" {
+ 		u.log.Error().Msg("there is no room")
++		if !busy {
++			u.w.UnReserve()
++		}
+ 		return
+ 	}
+ 	u.log.Info().Str("id", startGameResp.Rid).Msg("Received room response from worker")
+@@ -107,8 +115,24 @@ func (u *User) HandleResetGame(rq api.ResetGameRequest) {
+ 	u.w.ResetGame(u.Id().String())
+ }
+ 
+-func (u *User) HandleSaveGame() error {
+-	resp, err := u.w.SaveGame(u.Id().String())
++// HandlePauseGame freezes or resumes the user's game (RetroMate's in-game menu).
++func (u *User) HandlePauseGame(rq api.PauseGameRequest) {
++	if rq.Rid != u.w.RoomId {
++		return
++	}
++	u.w.PauseGame(u.Id().String(), rq.Paused)
++}
++
++// stateName is the optional state name a SaveGame/LoadGame carries (RetroMate); no payload = cloud-game's own slot.
++func stateName(rq *api.StateUserRequest) string {
++	if rq == nil {
++		return ""
++	}
++	return rq.Name
++}
++
++func (u *User) HandleSaveGame(rq *api.StateUserRequest) error {
++	resp, err := u.w.SaveGame(u.Id().String(), stateName(rq))
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -123,8 +147,28 @@ func (u *User) HandleSaveGame() error {
+ 	return nil
+ }
+ 
+-func (u *User) HandleLoadGame() error {
+-	resp, err := u.w.LoadGame(u.Id().String())
++// HandleGetOptions and HandleSetOption: the running core's options (RetroMate's in-game menu). The worker's answer
++// goes back to the user untouched.
++func (u *User) HandleGetOptions() error {
++	resp, err := u.w.GetOptions(u.Id().String())
++	if err != nil {
++		return err
++	}
++	u.Notify(api.GetOptions, resp)
++	return nil
++}
++
++func (u *User) HandleSetOption(rq api.OptionUserRequest) error {
++	resp, err := u.w.SetOption(u.Id().String(), rq.Key, rq.Value)
++	if err != nil {
++		return err
++	}
++	u.Notify(api.SetOption, resp)
++	return nil
++}
++
++func (u *User) HandleLoadGame(rq *api.StateUserRequest) error {
++	resp, err := u.w.LoadGame(u.Id().String(), stateName(rq))
+ 	if err != nil {
+ 		return err
+ 	}
+diff --git a/pkg/coordinator/workerapi.go b/pkg/coordinator/workerapi.go
+index dbceaed..e435b96 100644
+--- a/pkg/coordinator/workerapi.go
++++ b/pkg/coordinator/workerapi.go
+@@ -1,6 +1,10 @@
+ package coordinator
+ 
+-import "github.com/giongto35/cloud-game/v3/pkg/api"
++import (
++	"encoding/json"
++
++	"github.com/giongto35/cloud-game/v3/pkg/api"
++)
+ 
+ func (w *Worker) InitWebrtcStream(id string, initiator bool, sdp string) (*api.InitWebrtcStreamResponse, error) {
+ 	return api.UnwrapChecked[api.InitWebrtcStreamResponse](
+@@ -21,6 +25,7 @@ func (w *Worker) StartGame(id string, req api.GameStartUserRequest) (*api.StartG
+ 			PlayerIndex:  req.PlayerIndex,
+ 			Record:       req.Record,
+ 			RecordUser:   req.RecordUser,
++			Options:      req.Options,
+ 		}))
+ }
+ 
+@@ -28,14 +33,14 @@ func (w *Worker) QuitGame(id string) {
+ 	w.Notify(api.QuitGame, api.GameQuitRequest{Id: id, Rid: w.RoomId})
+ }
+ 
+-func (w *Worker) SaveGame(id string) (*api.SaveGameResponse, error) {
++func (w *Worker) SaveGame(id, name string) (*api.SaveGameResponse, error) {
+ 	return api.UnwrapChecked[api.SaveGameResponse](
+-		w.Send(api.SaveGame, api.SaveGameRequest{Id: id, Rid: w.RoomId}))
++		w.Send(api.SaveGame, api.SaveGameRequest{StatefulRoom: api.StatefulRoom{Id: id, Rid: w.RoomId}, Name: name}))
+ }
+ 
+-func (w *Worker) LoadGame(id string) (*api.LoadGameResponse, error) {
++func (w *Worker) LoadGame(id, name string) (*api.LoadGameResponse, error) {
+ 	return api.UnwrapChecked[api.LoadGameResponse](
+-		w.Send(api.LoadGame, api.LoadGameRequest{Id: id, Rid: w.RoomId}))
++		w.Send(api.LoadGame, api.LoadGameRequest{StatefulRoom: api.StatefulRoom{Id: id, Rid: w.RoomId}, Name: name}))
+ }
+ 
+ func (w *Worker) ChangePlayer(id string, index int) (*api.ChangePlayerResponse, error) {
+@@ -46,6 +51,20 @@ func (w *Worker) ChangePlayer(id string, index int) (*api.ChangePlayerResponse,
+ 		}))
+ }
+ 
++func (w *Worker) GetOptions(id string) (*json.RawMessage, error) {
++	return api.UnwrapChecked[json.RawMessage](
++		w.Send(api.GetOptions, api.GetOptionsRequest{Id: id, Rid: w.RoomId}))
++}
++
++func (w *Worker) SetOption(id, key, value string) (*string, error) {
++	return api.UnwrapChecked[string](
++		w.Send(api.SetOption, api.SetOptionRequest{StatefulRoom: api.StatefulRoom{Id: id, Rid: w.RoomId}, Key: key, Value: value}))
++}
++
++func (w *Worker) PauseGame(id string, paused bool) {
++	w.Notify(api.PauseGame, api.PauseGameRequest{StatefulRoom: api.StatefulRoom{Id: id, Rid: w.RoomId}, Paused: paused})
++}
++
+ func (w *Worker) ResetGame(id string) {
+ 	w.Notify(api.ResetGame, api.ResetGameRequest{Id: id, Rid: w.RoomId})
+ }
+diff --git a/pkg/games/library.go b/pkg/games/library.go
+index dd83b21..b54fe5e 100644
+--- a/pkg/games/library.go
++++ b/pkg/games/library.go
+@@ -151,6 +151,11 @@ func (lib *library) GetAll() []GameMetadata {
+ 
+ // FindGameByName returns some game info with its full filepath
+ func (lib *library) FindGameByName(name string) GameMetadata {
++	// Unknown name: the library may have changed since the last scan (fs events don't cross
++	// Docker Desktop bind mounts and the watcher isn't recursive), so rescan once before giving up.
++	if _, ok := lib.games[name]; !ok && lib.hasSource {
++		lib.Scan()
++	}
+ 	var game GameMetadata
+ 	if val, ok := lib.games[name]; ok {
+ 		val.Base = lib.config.path
+diff --git a/pkg/network/websocket/websocket.go b/pkg/network/websocket/websocket.go
+index 5b3d3fe..86843c5 100644
+--- a/pkg/network/websocket/websocket.go
++++ b/pkg/network/websocket/websocket.go
+@@ -149,9 +149,21 @@ func (c *Connection) reader() {
+ 			return err
+ 		})
+ 	}
++	// RetroMate: messages are handled on their own goroutine, in order, so that a slow one (the worker loading a
++	// big game, e.g. Dolphin) doesn't stop this loop from answering pings: the peer would time out and drop us.
++	queue := make(chan []byte, 32)
++	handled := make(chan struct{})
++	go func() {
++		defer close(handled)
++		for m := range queue {
++			c.callback(m, nil)
++		}
++	}()
+ 	for {
+ 		_, message, err := c.conn.ReadMessage()
+ 		if err != nil {
++			close(queue)
++			<-handled
+ 			if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+ 				if c.errorHandler != nil {
+ 					c.errorHandler(err)
+@@ -161,7 +173,7 @@ func (c *Connection) reader() {
+ 			}
+ 			break
+ 		}
+-		c.callback(message, err)
++		queue <- message
+ 	}
+ }
+ 
+diff --git a/pkg/worker/caged/libretro/caged.go b/pkg/worker/caged/libretro/caged.go
+index 3de3703..ef1bb8e 100644
+--- a/pkg/worker/caged/libretro/caged.go
++++ b/pkg/worker/caged/libretro/caged.go
+@@ -5,6 +5,7 @@ import (
+ 	"github.com/giongto35/cloud-game/v3/pkg/games"
+ 	"github.com/giongto35/cloud-game/v3/pkg/logger"
+ 	"github.com/giongto35/cloud-game/v3/pkg/worker/caged/libretro/manager"
++	"github.com/giongto35/cloud-game/v3/pkg/worker/caged/libretro/nanoarch"
+ 	"github.com/giongto35/cloud-game/v3/pkg/worker/cloud"
+ )
+ 
+@@ -60,6 +61,21 @@ func (c *Caged) ReloadFrontend() {
+ // VideoChangeCb adds a callback when video params are changed by the app.
+ func (c *Caged) VideoChangeCb(fn func()) { c.base.SetVideoChangeCb(fn) }
+ 
++// SetStatesDir, SaveStateAs and LoadStateNamed: named states in RetroMate's library (RetroMate).
++func (c *Caged) SetStatesDir(d string)            { c.base.statesDir = d }
++func (c *Caged) SaveStateAs(name string) error    { return c.base.SaveStateAs(name) }
++func (c *Caged) LoadStateNamed(name string) error { return c.base.LoadStateNamed(name) }
++
++// SetPaused freezes or resumes the emulation loop (RetroMate).
++func (c *Caged) SetPaused(p bool) { c.base.SetPaused(p) }
++
++// SetGameOptions sets core option values for the next game load only (RetroMate).
++func (c *Caged) SetGameOptions(o map[string]string) { c.base.SetGameOptions(o) }
++
++// CoreOptions and SetCoreOption: the running core's options, for the in-game menu (RetroMate).
++func (c *Caged) CoreOptions() nanoarch.CoreOptions        { return c.base.CoreOptions() }
++func (c *Caged) SetCoreOption(key, value string) error { return c.base.SetCoreOption(key, value) }
++
+ func (c *Caged) Load(game games.GameMetadata, path string) error {
+ 	if c.Emulator == nil {
+ 		return nil
+diff --git a/pkg/worker/caged/libretro/frontend.go b/pkg/worker/caged/libretro/frontend.go
+index 945a9a2..6e98bb4 100644
+--- a/pkg/worker/caged/libretro/frontend.go
++++ b/pkg/worker/caged/libretro/frontend.go
+@@ -3,6 +3,7 @@ package libretro
+ import (
+ 	"errors"
+ 	"fmt"
++	stdos "os"
+ 	"path/filepath"
+ 	"runtime"
+ 	"strings"
+@@ -17,6 +18,7 @@ import (
+ 	"github.com/giongto35/cloud-game/v3/pkg/worker/caged/app"
+ 	"github.com/giongto35/cloud-game/v3/pkg/worker/caged/libretro/graphics"
+ 	"github.com/giongto35/cloud-game/v3/pkg/worker/caged/libretro/nanoarch"
++	"github.com/giongto35/cloud-game/v3/pkg/worker/compression/zip"
+ )
+ 
+ type Emulator interface {
+@@ -58,6 +60,8 @@ type Frontend struct {
+ 	done    chan struct{}
+ 	doneEvt chan struct{} // closed when Start() fully exits
+ 	closed  atomic.Bool
++	statesDir string    // RetroMate: library/states/{platform}/{game} for named states
++	paused  atomic.Bool // RetroMate: the in-game menu froze the game; the loop idles without running frames
+ 	log     *logger.Logger
+ 	nano    *nanoarch.Nanoarch
+ 	onAudio func(app.Audio)
+@@ -337,6 +341,12 @@ func (f *Frontend) Start() {
+ 		case <-f.done:
+ 			return
+ 		default:
++			// RetroMate: paused, idle one frame's time without running the core (no video, no audio).
++			if f.paused.Load() {
++				time.Sleep(time.Duration(targetFrameTimeNs))
++				lastFrameStart = os.Nanotime()
++				continue
++			}
+ 			f.nano.NotifyFrameTime(targetFrameTimeNs / 1000)
+ 
+ 			f.Tick()
+@@ -419,6 +429,21 @@ func (f *Frontend) SaveStateName() string         { return filepath.Base(f.HashP
+ func (f *Frontend) Scale() (float64, string)      { return f.scale, f.scaleM }
+ func (f *Frontend) SetAudioCb(cb func(app.Audio)) { f.onAudio = cb }
+ func (f *Frontend) SetSessionId(name string)      { f.storage.SetMainSaveName(name) }
++func (f *Frontend) SetGameOptions(o map[string]string) { f.nano.GameOptions = o }
++func (f *Frontend) SetPaused(p bool)                   { f.paused.Store(p) }
++
++// CoreOptions and SetCoreOption: the core's own options, read and changed between two frames (RetroMate).
++func (f *Frontend) CoreOptions() nanoarch.CoreOptions {
++	f.mu.Lock()
++	defer f.mu.Unlock()
++	return f.nano.CoreOptions()
++}
++
++func (f *Frontend) SetCoreOption(key, value string) error {
++	f.mu.Lock()
++	defer f.mu.Unlock()
++	return f.nano.SetOption(key, value)
++}
+ func (f *Frontend) SetDataCb(cb func([]byte))     { f.onData = cb }
+ func (f *Frontend) SetVideoCb(ff func(app.Video)) { f.onVideo = ff }
+ func (f *Frontend) Tick()                         { f.mu.Lock(); f.nano.Run(); f.mu.Unlock() }
+@@ -501,6 +526,60 @@ func (f *Frontend) Save() error {
+ 	return nil
+ }
+ 
++// statePath is a named state's file. Names are timestamps (RetroMate's server lists them as numbers): digits only,
++// so a name can't climb out of the folder.
++func (f *Frontend) statePath(name string) (string, error) {
++	if name == "" || strings.Trim(name, "0123456789") != "" || f.statesDir == "" {
++		return "", fmt.Errorf("bad state name %q", name)
++	}
++	return filepath.Join(f.statesDir, name+".state"), nil
++}
++
++// SaveStateAs writes the current state to RetroMate's library, zip-compressed (a Wii state is ~100 MB raw), through a
++// temporary file so a half-written state never shows up in the list (RetroMate).
++func (f *Frontend) SaveStateAs(name string) error {
++	path, err := f.statePath(name)
++	if err != nil {
++		return err
++	}
++	f.mu.Lock()
++	ss, err := nanoarch.SaveState()
++	f.mu.Unlock()
++	if err != nil {
++		return err
++	}
++	z, err := zip.Compress(ss, name)
++	if err != nil {
++		return err
++	}
++	if err := stdos.MkdirAll(f.statesDir, 0755); err != nil {
++		return err
++	}
++	if err := stdos.WriteFile(path+".tmp", z, 0644); err != nil {
++		return err
++	}
++	return stdos.Rename(path+".tmp", path)
++}
++
++// LoadStateNamed restores a state saved by SaveStateAs (RetroMate).
++func (f *Frontend) LoadStateNamed(name string) error {
++	path, err := f.statePath(name)
++	if err != nil {
++		return err
++	}
++	z, err := stdos.ReadFile(path)
++	if err != nil {
++		return err
++	}
++	ss, _, err := zip.Read(z)
++	if err != nil {
++		return err
++	}
++	f.mu.Lock()
++	defer f.mu.Unlock()
++	return nanoarch.RestoreSaveState(ss)
++}
++
+ // Load restores the state from the filesystem.
+ func (f *Frontend) Load() error {
+ 	f.mu.Lock()
+diff --git a/pkg/worker/caged/libretro/graphics/rgfw.go b/pkg/worker/caged/libretro/graphics/rgfw.go
+index 50c37d3..bde09f1 100644
+--- a/pkg/worker/caged/libretro/graphics/rgfw.go
++++ b/pkg/worker/caged/libretro/graphics/rgfw.go
+@@ -387,6 +387,12 @@ static void RGFW_window_makeCurrentContext_OpenGL(RGFW_window* win) {
+         glXMakeCurrent(win->src.display, win->src.window, win->src.ctx_native->ctx);
+ }
+ 
++// A GLX context can be current in one thread only: Mesa raises BadAccess (fatal with Xlib's default handler)
++// when another thread binds it, so the creating thread has to let it go.
++static void RGFW_releaseCurrentContext_OpenGL(RGFW_window* win) {
++    if (win && win->src.display) glXMakeCurrent(win->src.display, None, NULL);
++}
++
+ static RGFW_proc RGFW_getProcAddress_OpenGL(const char* name) {
+     return (RGFW_proc)glXGetProcAddress((const GLubyte*)name);
+ }
+@@ -558,6 +564,13 @@ func (r *RGFW) BindContext() error {
+ 	return nil
+ }
+ 
++// UnbindContext releases the context from the calling thread (X11), so another thread can bind it.
++func (r *RGFW) UnbindContext() {
++	if r.inited {
++		C.RGFW_releaseCurrentContext_OpenGL(r.win)
++	}
++}
++
+ func RGFWGlProcAddress(proc string) unsafe.Pointer {
+ 	cname := C.CString(proc)
+ 	defer C.free(unsafe.Pointer(cname))
+diff --git a/pkg/worker/caged/libretro/nanoarch/nanoarch.c b/pkg/worker/caged/libretro/nanoarch/nanoarch.c
+index 669862d..34d3e31 100644
+--- a/pkg/worker/caged/libretro/nanoarch/nanoarch.c
++++ b/pkg/worker/caged/libretro/nanoarch/nanoarch.c
+@@ -162,9 +162,6 @@ bool core_environment_cgo(unsigned cmd, void *data) {
+ 
+     switch (cmd)
+     {
+-        case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
+-          return false;
+-          break;
+         case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
+           return false;
+           break;
+@@ -206,6 +203,8 @@ int16_t core_input_state_cgo(unsigned port, unsigned device, unsigned index, uns
+ 
+     switch (device) {
+         case RETRO_DEVICE_JOYPAD:
++            // Some cores (LRPS2) ask for all buttons at once even without GET_INPUT_BITMASKS
++            if (id == RETRO_DEVICE_ID_JOYPAD_MASK) return (int16_t)input_cache.buttons[port];
+             return (int16_t)((input_cache.buttons[port] >> id) & 1);
+ 
+         case RETRO_DEVICE_ANALOG:
+diff --git a/pkg/worker/caged/libretro/nanoarch/nanoarch.go b/pkg/worker/caged/libretro/nanoarch/nanoarch.go
+index a451aeb..5a7acfd 100644
+--- a/pkg/worker/caged/libretro/nanoarch/nanoarch.go
++++ b/pkg/worker/caged/libretro/nanoarch/nanoarch.go
+@@ -7,6 +7,7 @@ import (
+ 	"path/filepath"
+ 	"runtime"
+ 	"slices"
++	"strconv"
+ 	"strings"
+ 	"sync"
+ 	"sync/atomic"
+@@ -46,9 +47,15 @@ type Nanoarch struct {
+ 	meta          Metadata
+ 	options       map[string]string
+ 	options4rom   map[string]map[string]string
++	GameOptions   map[string]string // RetroMate: per-launch values from the start request
++	// RetroMate: the options the core declared (options.go), and whether one changed since the core last asked
++	declared       []CoreOption
++	categories     []CoreOptionCategory
++	optionsChanged atomic.Bool
++	devices        []CoreDevice // RetroMate: what port 1 can take (SET_CONTROLLER_INFO), and what it has now
++	device         uint
+ 	reserved      chan struct{} // limits concurrent use
+ 	Rot           uint
+-	serializeSize C.size_t
+ 	Stopped       atomic.Bool
+ 	sys           struct {
+ 		av  C.struct_retro_system_av_info
+@@ -228,6 +235,9 @@ func (n *Nanoarch) CoreLoad(meta Metadata) {
+ 
+ 	n.options = maps.Clone(meta.Options)
+ 	n.options4rom = meta.Options4rom
++	n.declared, n.categories = nil, nil // the core declares them again in retro_set_environment / retro_init
++	n.devices, n.device = nil, C.RETRO_DEVICE_JOYPAD
++	n.optionsChanged.Store(false)
+ 
+ 	corePath := meta.LibPath + meta.LibExt
+ 	coreLib, err = open(corePath)
+@@ -316,6 +326,18 @@ func (n *Nanoarch) LoadGame(path string) error {
+ 		}
+ 	}
+ 
++	// RetroMate: per-launch values (the Wii system language chosen in the UI, the options saved for this game from
++	// the in-game menu). Any option the core declared can be set; a value the core doesn't know falls back to its
++	// default, as with a stale config.
++	if len(n.GameOptions) > 0 && n.options == nil {
++		n.options = map[string]string{}
++	}
++	for k, v := range n.GameOptions {
++		if k != DeviceKey {
++			n.options[k] = v
++		}
++	}
++
+ 	if ok := C.bridge_retro_load_game(retroLoadGame, &game); !ok {
+ 		return fmt.Errorf("core failed to load ROM: %v", path)
+ 	}
+@@ -332,8 +354,9 @@ func (n *Nanoarch) LoadGame(path string) error {
+ 	}
+ 	n.sys.av = av
+ 
+-	n.serializeSize = C.bridge_retro_serialize_size(retroSerializeSize)
+-	n.log.Info().Msgf("Save file size: %v", byteCountBinary(int64(n.serializeSize)))
++	// RetroMate: no retro_serialize_size here. It only fed a log line, and cores that finish booting on their first
++	// frames (Dolphin) dereference null when asked this early; libretro allows it to fail before retro_run.
++	// SaveState asks for the size when it saves.
+ 
+ 	Nan0.tickTime = time.Duration(float64(time.Second) / float64(n.sys.av.timing.fps))
+ 	if n.vfr {
+@@ -350,6 +373,7 @@ func (n *Nanoarch) LoadGame(path string) error {
+ 			runtime.LockOSThread()
+ 			initVideo()
+ 			C.bridge_context_reset(Nan0.Video.hw.context_reset)
++			n.glCtx.UnbindContext() // Run() binds it again on the emulation thread
+ 			runtime.UnlockOSThread()
+ 		}
+ 	}
+@@ -365,6 +389,15 @@ func (n *Nanoarch) LoadGame(path string) error {
+ 		for _, device := range v {
+ 			C.bridge_retro_set_controller_port_device(retroSetControllerPortDevice, C.uint(k), C.unsigned(device))
+ 			n.log.Debug().Msgf("set custom port-device: %v:%v", k, device)
++			if k == 0 {
++				n.device = uint(device)
++			}
++		}
++	}
++	// RetroMate: the device chosen for this game in the in-game menu (Wii: Wii Remote, + Nunchuk...)
++	if v, ok := n.GameOptions[DeviceKey]; ok {
++		if err := n.setDevice(v); err != nil {
++			n.log.Warn().Err(err).Send()
+ 		}
+ 	}
+ 
+@@ -373,6 +406,18 @@ func (n *Nanoarch) LoadGame(path string) error {
+ 	return nil
+ }
+ 
++// setDevice plugs one of the devices the core listed into port 1, between two frames (the caller holds the frontend
++// lock). The core takes it like a frontend's controller menu: Dolphin swaps the Wii Remote's extension at once.
++func (n *Nanoarch) setDevice(value string) error {
++	d, err := strconv.ParseUint(value, 10, 32)
++	if err != nil || !slices.ContainsFunc(n.devices, func(x CoreDevice) bool { return x.ID == uint(d) }) {
++		return fmt.Errorf("unknown device %v", value)
++	}
++	C.bridge_retro_set_controller_port_device(retroSetControllerPortDevice, 0, C.unsigned(d))
++	n.device = uint(d)
++	return nil
++}
++
+ func (n *Nanoarch) Shutdown() {
+ 	Nan0.audioBuffCb = nil
+ 	if n.LibCo {
+@@ -411,6 +456,7 @@ func (n *Nanoarch) Shutdown() {
+ 	}
+ 	n.options = nil
+ 	n.options4rom = nil
++	n.GameOptions = nil
+ 	Nan0.audioBuffCb = nil
+ 	n.freeCStrings()
+ }
+@@ -830,6 +876,32 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
+ 			return true
+ 		}
+ 		return false
++	// RetroMate: the core's option declarations (options.go). Version 2 = categories and value labels; cores that
++	// only know older versions fall back to them on their own.
++	case C.RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION:
++		*(*C.unsigned)(data) = 2
++		return true
++	case C.RETRO_ENVIRONMENT_SET_VARIABLES:
++		declareVariables((*C.struct_retro_variable)(data))
++		return true
++	case C.RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
++		declareV1((*C.struct_retro_core_option_definition)(data))
++		return true
++	case C.RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL:
++		declareV1((*C.struct_retro_core_options_intl)(data).us)
++		return true
++	case C.RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2:
++		declareV2((*C.struct_retro_core_options_v2)(data))
++		return true
++	case C.RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL:
++		declareV2((*C.struct_retro_core_options_v2_intl)(data).us)
++		return true
++	case C.RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
++		setDisplay((*C.struct_retro_core_option_display)(data))
++		return true
++	case C.RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
++		*(*C.bool)(data) = C.bool(Nan0.optionsChanged.Swap(false))
++		return true
+ 	case C.RETRO_ENVIRONMENT_GET_VARIABLE:
+ 		if Nan0.options == nil {
+ 			return false
+@@ -858,28 +930,13 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
+ 		}
+ 		return false
+ 	case C.RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
+-		if Nan0.log.GetLevel() > logger.DebugLevel {
+-			return false
+-		}
+-
+-		info := (*[64]C.struct_retro_controller_info)(data)
+-		for c, controller := range info {
+-			tp := unsafe.Pointer(controller.types)
+-			if tp == nil {
+-				break
+-			}
+-			cInfo := strings.Builder{}
+-			fmt.Fprintf(&cInfo, "Controller [%v] ", c)
+-			cd := (*[32]C.struct_retro_controller_description)(tp)
+-			delim := ", "
+-			n := int(controller.num_types)
+-			for i := range n {
+-				if i == n-1 {
+-					delim = ""
+-				}
+-				fmt.Fprintf(&cInfo, "%v: %v%s", cd[i].id, C.GoString(cd[i].desc), delim)
++		// RetroMate: port 1's devices, for the in-game menu (cloud-game gives each player port 1)
++		info := (*C.struct_retro_controller_info)(data)
++		Nan0.devices = nil
++		if info != nil && info.types != nil {
++			for _, d := range unsafe.Slice(info.types, info.num_types) {
++				Nan0.devices = append(Nan0.devices, CoreDevice{ID: uint(d.id), Label: cstr(d.desc)})
+ 			}
+-			//Nan0.log.Debug().Msgf("%v", cInfo.String())
+ 		}
+ 		return true
+ 	case C.RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK:
+diff --git a/pkg/worker/caged/libretro/nanoarch/options.go b/pkg/worker/caged/libretro/nanoarch/options.go
+new file mode 100644
+index 0000000..f5f4fb5
+--- /dev/null
++++ b/pkg/worker/caged/libretro/nanoarch/options.go
+@@ -0,0 +1,178 @@
++package nanoarch
++
++// RetroMate: the core's own options, as the core declares them through the libretro API (any core, any console), so
++// that a client can list them and change them while the game runs. A changed value reaches the core through
++// GET_VARIABLE_UPDATE; whether it applies at once or at the next start is up to the core.
++
++/*
++#include "libretro.h"
++*/
++import "C"
++
++import (
++	"cmp"
++	"fmt"
++	"slices"
++	"strings"
++	"unsafe"
++)
++
++type CoreOptionValue struct {
++	Value string `json:"value"`
++	Label string `json:"label"`
++}
++
++type CoreOption struct {
++	Key      string            `json:"key"`
++	Label    string            `json:"label"`
++	Category string            `json:"category,omitempty"`
++	Values   []CoreOptionValue `json:"values"`
++	Default  string            `json:"default"` // the core config's value if it sets one, else the core's own
++	Value    string            `json:"value"`
++	Hidden   bool              `json:"hidden,omitempty"` // the core says it doesn't apply now (SET_CORE_OPTIONS_DISPLAY)
++}
++
++type CoreOptionCategory struct {
++	Key   string `json:"key"`
++	Label string `json:"label"`
++}
++
++// CoreDevice: a controller the core can emulate on a port (SET_CONTROLLER_INFO), e.g. Dolphin's "WiiMote + Nunchuk".
++type CoreDevice struct {
++	ID    uint   `json:"id"`
++	Label string `json:"label"`
++}
++
++// DeviceKey isn't a core option: it names port 1's device (one of CoreOptions.Devices), so that it travels like one,
++// in the start request and through SetOption, and is saved with the game's options.
++const DeviceKey = "retromate_device"
++
++type CoreOptions struct {
++	Categories []CoreOptionCategory `json:"categories,omitempty"`
++	Options    []CoreOption         `json:"options"`
++	Devices    []CoreDevice         `json:"devices,omitempty"`
++	Device     uint                 `json:"device"`
++}
++
++func cstr(p *C.char) string {
++	if p == nil {
++		return ""
++	}
++	return C.GoString(p)
++}
++
++// each walks a C array terminated by an element whose key is NULL.
++func each[T any](first *T, end func(*T) bool, fn func(*T)) {
++	if first == nil {
++		return
++	}
++	for p := first; !end(p); p = (*T)(unsafe.Add(unsafe.Pointer(p), unsafe.Sizeof(*p))) {
++		fn(p)
++	}
++}
++
++func coreValues(vs []C.struct_retro_core_option_value) (out []CoreOptionValue) {
++	for _, v := range vs {
++		if v.value == nil {
++			break
++		}
++		value := cstr(v.value)
++		out = append(out, CoreOptionValue{Value: value, Label: cmp.Or(cstr(v.label), value)})
++	}
++	return
++}
++
++// declareVariables: API v0, "Description; default|other|...".
++func declareVariables(vars *C.struct_retro_variable) {
++	var opts []CoreOption
++	each(vars, func(v *C.struct_retro_variable) bool { return v.key == nil }, func(v *C.struct_retro_variable) {
++		desc, list, _ := strings.Cut(cstr(v.value), "; ")
++		o := CoreOption{Key: cstr(v.key), Label: desc}
++		for _, s := range strings.Split(list, "|") {
++			o.Values = append(o.Values, CoreOptionValue{Value: s, Label: s})
++		}
++		o.Default = o.Values[0].Value
++		opts = append(opts, o)
++	})
++	Nan0.declared, Nan0.categories = opts, nil
++}
++
++// declareV1: API v1 (SET_CORE_OPTIONS, and the English half of SET_CORE_OPTIONS_INTL).
++func declareV1(defs *C.struct_retro_core_option_definition) {
++	var opts []CoreOption
++	each(defs, func(d *C.struct_retro_core_option_definition) bool { return d.key == nil },
++		func(d *C.struct_retro_core_option_definition) {
++			opts = append(opts, CoreOption{Key: cstr(d.key), Label: cstr(d.desc), Values: coreValues(d.values[:]),
++				Default: cstr(d.default_value)})
++		})
++	Nan0.declared, Nan0.categories = opts, nil
++}
++
++// declareV2: API v2, with categories (SET_CORE_OPTIONS_V2, and the English half of its INTL variant).
++func declareV2(o *C.struct_retro_core_options_v2) {
++	if o == nil {
++		return
++	}
++	var cats []CoreOptionCategory
++	each(o.categories, func(c *C.struct_retro_core_option_v2_category) bool { return c.key == nil },
++		func(c *C.struct_retro_core_option_v2_category) {
++			cats = append(cats, CoreOptionCategory{Key: cstr(c.key), Label: cstr(c.desc)})
++		})
++	var opts []CoreOption
++	each(o.definitions, func(d *C.struct_retro_core_option_v2_definition) bool { return d.key == nil },
++		func(d *C.struct_retro_core_option_v2_definition) {
++			cat := cstr(d.category_key)
++			label := cstr(d.desc)
++			if cat != "" {
++				label = cmp.Or(cstr(d.desc_categorized), label)
++			}
++			opts = append(opts, CoreOption{Key: cstr(d.key), Label: label, Category: cat,
++				Values: coreValues(d.values[:]), Default: cstr(d.default_value)})
++		})
++	Nan0.declared, Nan0.categories = opts, cats
++}
++
++// setDisplay: SET_CORE_OPTIONS_DISPLAY, the core showing or hiding an option.
++func setDisplay(d *C.struct_retro_core_option_display) {
++	if d == nil {
++		return
++	}
++	key := cstr(d.key)
++	for i := range Nan0.declared {
++		if Nan0.declared[i].Key == key {
++			Nan0.declared[i].Hidden = !bool(d.visible)
++		}
++	}
++}
++
++// CoreOptions lists the options the core declared, each with the value it runs with now.
++func (n *Nanoarch) CoreOptions() CoreOptions {
++	opts := slices.Clone(n.declared)
++	for i := range opts {
++		if v, ok := n.meta.Options[opts[i].Key]; ok {
++			opts[i].Default = v
++		}
++		opts[i].Value = opts[i].Default
++		if v, ok := n.options[opts[i].Key]; ok {
++			opts[i].Value = strings.TrimRight(v, "\x00") // GET_VARIABLE keeps them NUL-terminated
++		}
++	}
++	return CoreOptions{Categories: n.categories, Options: opts, Devices: n.devices, Device: n.device}
++}
++
++// SetOption changes one option of the running core; only declared options and values are taken.
++func (n *Nanoarch) SetOption(key, value string) error {
++	if key == DeviceKey {
++		return n.setDevice(value)
++	}
++	i := slices.IndexFunc(n.declared, func(o CoreOption) bool { return o.Key == key })
++	if i < 0 || !slices.ContainsFunc(n.declared[i].Values, func(v CoreOptionValue) bool { return v.Value == value }) {
++		return fmt.Errorf("unknown core option %s=%s", key, value)
++	}
++	if n.options == nil {
++		n.options = map[string]string{}
++	}
++	n.options[key] = value
++	n.optionsChanged.Store(true)
++	return nil
++}
+diff --git a/pkg/worker/coordinator.go b/pkg/worker/coordinator.go
+index a537ec1..8df8849 100644
+--- a/pkg/worker/coordinator.go
++++ b/pkg/worker/coordinator.go
+@@ -93,6 +93,12 @@ func (c *coordinator) HandleRequests(w *Worker) chan struct{} {
+ 			err = api.Do(x, func(d api.GameQuitRequest) { c.HandleQuitGame(d, w) })
+ 		case api.ResetGame:
+ 			err = api.Do(x, func(d api.ResetGameRequest) { c.HandleResetGame(d, w) })
++		case api.PauseGame:
++			err = api.Do(x, func(d api.PauseGameRequest) { c.HandlePauseGame(d, w) })
++		case api.GetOptions:
++			err = api.Do(x, func(d api.GetOptionsRequest) { out = c.HandleGetOptions(d, w) })
++		case api.SetOption:
++			err = api.Do(x, func(d api.SetOptionRequest) { out = c.HandleSetOption(d, w) })
+ 		default:
+ 			c.log.Warn().Msgf("unhandled packet type %v", x.T)
+ 		}
+diff --git a/pkg/worker/coordinatorhandlers.go b/pkg/worker/coordinatorhandlers.go
+index 6972cc7..fe9504b 100644
+--- a/pkg/worker/coordinatorhandlers.go
++++ b/pkg/worker/coordinatorhandlers.go
+@@ -2,6 +2,8 @@ package worker
+ 
+ import (
+ 	"encoding/json"
++	"path/filepath"
++	"strings"
+ 
+ 	"github.com/giongto35/cloud-game/v3/pkg/api"
+ 	"github.com/giongto35/cloud-game/v3/pkg/com"
+@@ -127,8 +129,10 @@ func (c *coordinator) HandleGameStart(rq api.StartGameRequest, w *Worker) api.Ou
+ 		// start the emulator
+ 		app := room.WithEmulator(w.mana.Get(caged.Libretro))
+ 		app.ReloadFrontend()
++		app.SetGameOptions(rq.Options)
+ 		app.SetSessionId(uid)
+ 		app.SetSaveOnClose(true)
++		app.SetStatesDir(statesDir(game.Path))
+ 		app.EnableCloudStorage(uid, w.storage)
+ 		app.EnableRecording(rq.Record, rq.RecordUser, gameName)
+ 
+@@ -244,6 +248,35 @@ func (c *coordinator) HandleQuitGame(rq api.GameQuitRequest, w *Worker) {
+ 	}
+ }
+ 
++// HandlePauseGame freezes or resumes the room's emulator (RetroMate).
++func (c *coordinator) HandlePauseGame(rq api.PauseGameRequest, w *Worker) {
++	if r := w.router.FindRoom(rq.Rid); r != nil {
++		room.WithEmulator(r.App()).SetPaused(rq.Paused)
++	}
++}
++
++// HandleGetOptions and HandleSetOption: the room's core options, for the in-game menu (RetroMate).
++func (c *coordinator) HandleGetOptions(rq api.GetOptionsRequest, w *Worker) api.Out {
++	r := w.router.FindRoom(rq.Rid)
++	if r == nil {
++		return api.ErrPacket
++	}
++	opts := room.WithEmulator(r.App()).CoreOptions()
++	return api.Out{Payload: &opts}
++}
++
++func (c *coordinator) HandleSetOption(rq api.SetOptionRequest, w *Worker) api.Out {
++	r := w.router.FindRoom(rq.Rid)
++	if r == nil {
++		return api.ErrPacket
++	}
++	if err := room.WithEmulator(r.App()).SetCoreOption(rq.Key, rq.Value); err != nil {
++		c.log.Error().Err(err).Msg("cannot set core option")
++		return api.ErrPacket
++	}
++	return api.OkPacket
++}
++
+ func (c *coordinator) HandleResetGame(rq api.ResetGameRequest, w *Worker) api.Out {
+ 	if r := w.router.FindRoom(rq.Rid); r != nil {
+ 		room.WithEmulator(r.App()).Reset()
+@@ -252,12 +285,31 @@ func (c *coordinator) HandleResetGame(rq api.ResetGameRequest, w *Worker) api.Ou
+ 	return api.ErrPacket
+ }
+ 
++// statesDir is where RetroMate keeps a game's states: library/states/{platform}/{game}, mounted on StatesRoot.
++// game is the path below the library root, as in RetroMate: "ps2/Tekken 5.iso" or "ps2/Tekken 5/disc.iso" (the
++// folder names the game).
++func statesDir(game string) string {
++	parts := strings.Split(filepath.ToSlash(game), "/")
++	name := strings.TrimSuffix(parts[len(parts)-1], filepath.Ext(parts[len(parts)-1]))
++	if len(parts) > 2 {
++		name = parts[1]
++	}
++	return filepath.Join(StatesRoot, parts[0], name)
++}
++
++// StatesRoot is RetroMate's library/states folder inside the container (docker-compose.yml).
++const StatesRoot = "/usr/local/share/cloud-game/states"
++
+ func (c *coordinator) HandleSaveGame(rq api.SaveGameRequest, w *Worker) api.Out {
+ 	r := w.router.FindRoom(rq.Rid)
+ 	if r == nil {
+ 		return api.ErrPacket
+ 	}
+-	if err := room.WithEmulator(r.App()).SaveGameState(); err != nil {
++	save := room.WithEmulator(r.App()).SaveGameState
++	if rq.Name != "" {
++		save = func() error { return room.WithEmulator(r.App()).SaveStateAs(rq.Name) }
++	}
++	if err := save(); err != nil {
+ 		c.log.Error().Err(err).Msg("cannot save game state")
+ 		return api.ErrPacket
+ 	}
+@@ -269,7 +321,11 @@ func (c *coordinator) HandleLoadGame(rq api.LoadGameRequest, w *Worker) api.Out
+ 	if r == nil {
+ 		return api.ErrPacket
+ 	}
+-	if err := room.WithEmulator(r.App()).RestoreGameState(); err != nil {
++	load := room.WithEmulator(r.App()).RestoreGameState
++	if rq.Name != "" {
++		load = func() error { return room.WithEmulator(r.App()).LoadStateNamed(rq.Name) }
++	}
++	if err := load(); err != nil {
+ 		c.log.Error().Err(err).Msg("cannot load game state")
+ 		return api.ErrPacket
+ 	}
+diff --git a/pkg/worker/media/gstreamer.go b/pkg/worker/media/gstreamer.go
+index c5fe8ec..3cf2e77 100644
+--- a/pkg/worker/media/gstreamer.go
++++ b/pkg/worker/media/gstreamer.go
+@@ -46,6 +46,17 @@ static inline void pushVideoBuf(GstAppSrc *src, void *data, gsize len,
+ 	gst_app_src_push_buffer(src, buf);
+ }
+ 
++// setVideoSize updates the appsrc caps when a core changes its frame size without telling the frontend
++// (e.g. LRPS2 rendering 512x448 inside a 640x448 geometry); videoconvertscale then rescales to the output caps.
++static inline void setVideoSize(GstAppSrc *src, guint w, guint h) {
++	GstCaps *old = gst_app_src_get_caps(src);
++	GstCaps *caps = gst_caps_copy(old);
++	gst_caps_unref(old);
++	gst_caps_set_simple(caps, "width", G_TYPE_INT, w, "height", G_TYPE_INT, h, NULL);
++	gst_app_src_set_caps(src, caps);
++	gst_caps_unref(caps);
++}
++
+ // pushAudioBuf copies audio data into a new buffer.
+ static inline void pushAudioBuf(GstAppSrc *src, void *data, gsize len) {
+ 	GstBuffer *buf = gst_buffer_new_allocate(NULL, len, NULL);
+@@ -101,6 +112,9 @@ var audioBufPool = sync.Pool{New: func() any { b := make([]byte, 4096); return &
+ var pixFmtCache = map[string]uint32{}
+ 
+ func init() {
++	// SIGSEGV belongs to the cores: PCSX2 (LRPS2) fastmem faults on purpose and handles it. With segtrap on,
++	// a fault on the emulator thread while GStreamer loads a plugin is taken for a plugin crash and kills the worker.
++	C.gst_segtrap_set_enabled(C.FALSE)
+ 	gst.Init(nil)
+ 
+ 	s := gst.NewStructure("GstForceKeyUnit")
+@@ -352,10 +366,15 @@ func (g *GstMediaPipe) pullAudio(_ *app.Sink) gst.FlowReturn {
+ // videoWorker is the single goroutine that does push+pull for video.
+ func (g *GstMediaPipe) videoWorker(v *pipe, vidFmt uint32, ch <-chan videoJob, done chan<- struct{}) {
+ 	defer close(done)
++	var w, h int
+ 	for job := range ch {
+ 		if v.stale.Load() {
+ 			continue
+ 		}
++		if job.w != w || job.h != h {
++			C.setVideoSize(v.src(), C.guint(job.w), C.guint(job.h))
++			w, h = job.w, job.h
++		}
+ 		C.pushVideoBuf(v.src(),
+ 			unsafe.Pointer(&job.data[0]), C.gsize(len(job.data)),
+ 			C.GstVideoFormat(vidFmt), C.guint(job.w), C.guint(job.h), C.gint(job.stride))

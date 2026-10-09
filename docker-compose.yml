@@ -1,0 +1,35 @@
+# Stream server for platforms with runner "stream": cloud-game (coordinator + worker) running libretro cores
+# server-side and streaming them over WebRTC. The browser client is web/src/stream.js.
+#   docker compose up -d
+# Browser on another machine: STREAM_HOST_IP=<LAN IP of this host> docker compose up -d
+services:
+  cloud-game:
+    build: ./stream # official image + patched worker + Mesa/Xvfb, see stream/Dockerfile
+    shm_size: 1gb # Dolphin keeps the emulated Wii RAM in /dev/shm; Docker's default 64 MB ends in SIGBUS
+    environment:
+      - DISPLAY=:99
+      - CLOUD_GAME_COORDINATOR_ORIGIN_USERWS=*
+      - CLOUD_GAME_WEBRTC_SINGLEPORT=8443
+      - CLOUD_GAME_WEBRTC_ICEIPMAP=${STREAM_HOST_IP:-127.0.0.1}
+      - GST_DEBUG=1 # GStreamer errors only (e.g. rejected frame sizes)
+    # Xvfb gives hardware-rendered cores (PS2, N64) the X server their GL context needs
+    command: >-
+      bash -c "rm -f /tmp/.X99-lock /tmp/.X11-unix/X99; Xvfb :99 -screen 0 320x240x24 -nolisten tcp &
+      ./coordinator & while [ ! -S /tmp/.X11-unix/X99 ]; do sleep 0.1; done; ./worker"
+    ports: ["8100:8000", "8443:8443/udp"]
+    volumes:
+      - ./library/roms:/usr/local/share/cloud-game/assets/games:ro
+      - ./library/bios/ps2:/usr/local/share/cloud-game/libretro/system/pcsx2/bios # rw: the core writes NVRAM/MEC files there
+      - ./stream/config.yaml:/usr/local/share/cloud-game/configs/config.yaml:ro
+      - cores:/usr/local/share/cloud-game/assets/cores
+      - saves:/root/.cr
+      # the cores' save directory: Dolphin's User folder (Wii NAND, game saves, shader cache) lives here
+      - ./library/saves/cloud-game:/usr/local/share/cloud-game/libretro/legacy_save
+      # PS2 memory cards: LRPS2 keeps them in its system folder, not the save one; without this they lived in the
+      # container and every recreate (docker compose up after a build) handed out blank cards
+      - ./library/saves/ps2/memcards:/usr/local/share/cloud-game/libretro/system/pcsx2/memcards
+      # save states, next to the browser games' ones: the worker writes {platform}/{game}/{ms}.state (stream/cloud-game.patch)
+      - ./library/states:/usr/local/share/cloud-game/states
+    restart: unless-stopped
+
+volumes: { cores: {}, saves: {} }

@@ -1,0 +1,389 @@
+/* In-game menu (ingame.js). The paused game pulls back under a dimmed set lit in the console's hue; a command bar
+   drops in on top, the game's card and the volume slide in from the left, the players from the right, and the box
+   swings round to face you. Closing reverses it, faster and without the stagger. Panels open in the middle. */
+
+/* ---------- The set */
+.ingame {
+  position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 0;
+  border: 0; overflow: hidden; background: none; color: var(--ink); font-family: var(--f-body); font-size: 1.0625rem;
+}
+.ingame::backdrop {
+  background:
+    radial-gradient(75% 60% at 50% 0%, oklch(0.42 0.14 var(--hue, 292) / 0.42), transparent 72%),
+    oklch(0.12 0.03 var(--hue, 292) / 0.6);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2); backdrop-filter: blur(14px) saturate(1.2);
+  opacity: 0; transition: opacity 200ms ease;
+}
+.ingame[data-state='open']::backdrop { opacity: 1; transition: opacity 380ms var(--ease); }
+
+/* This menu replaces EmulatorJS's own bar and right-click menu. */
+#game :is(.ejs_menu_bar, .ejs_context_menu) { display: none !important; }
+
+/* The game behind steps back while the menu is up (play.html's #game). */
+#game { transform-origin: 50% 42%; transition: transform 260ms var(--ease), filter 260ms ease; }
+body[data-ingame] #game { transform: scale(0.94); filter: brightness(0.72) saturate(0.85); transition: transform 520ms var(--ease), filter 520ms ease; }
+
+/* ---------- Dashboard layout: bar on top, game + volume left, players right, panels in the middle */
+.ig {
+  position: relative; display: grid; height: 100%; align-content: start; overflow-y: auto; overscroll-behavior: contain;
+  padding: clamp(16px, 3vh, 36px) var(--gutter) 100px;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr) minmax(250px, 320px);
+  grid-template-rows: auto auto 1fr;
+  grid-template-areas: 'bar bar bar' 'game stage players' 'volume stage .';
+  gap: 20px clamp(16px, 2.4vw, 32px);
+}
+.ig-bar { grid-area: bar; justify-self: center; }
+.ig-game { grid-area: game; }
+.ig-volume { grid-area: volume; align-self: start; }
+.ig-players { grid-area: players; align-self: start; }
+/* Panels float over the whole middle band, above the (dimmed, inert) cards, like a window on the game bar. */
+.ig-stage { grid-column: 1 / -1; grid-row: 2 / 4; z-index: 1; display: grid; justify-items: center; align-content: start; min-width: 0; min-height: 0; pointer-events: none; }
+.ig-stage > * { pointer-events: auto; }
+
+.ig-w, .ig-panel, .ig-bar {
+  background: oklch(0.19 0.03 var(--hue) / 0.88);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 6px 0 oklch(0.1 0.03 var(--hue) / 0.9); /* extrusion, not blur */
+}
+.ig-w { padding: 20px 22px 22px; border-radius: 20px; }
+.ig-w-title { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 1.05rem; }
+.ig-w-title i { font-size: 1.3rem; color: oklch(0.82 0.11 var(--bh)); }
+.ig-w-title output { margin-left: auto; font-family: var(--f-body); font-weight: 700; font-size: 0.95rem; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+
+/* ---------- Command bar */
+.ig-bar { display: flex; align-items: center; gap: 4px; padding: 8px; border-radius: 24px; }
+.ig-clock { margin-right: 6px; padding: 0 18px 0 14px; border-right: 1px solid var(--surface-line); font-weight: 800; font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+.ig-sep { flex: none; align-self: stretch; width: 1px; margin: 12px 4px; background: var(--surface-line); }
+.ig-cmd {
+  display: grid; justify-items: center; gap: 5px; min-width: 94px; padding: 10px 12px 9px; border: 0; border-radius: 16px; cursor: pointer;
+  font: inherit; font-size: 0.95rem; font-weight: 700; color: var(--ink-2); background: none;
+  transition: background-color 150ms ease, color 150ms ease, transform 160ms var(--ease);
+}
+.ig-cmd i { font-size: 1.75rem; color: var(--ink); transition: color 150ms ease; }
+.ig-cmd:focus { background: #fff; color: var(--ink-dark); }
+.ig-cmd:focus i { color: var(--ink-dark); }
+.ig-cmd:active { transform: scale(0.95); }
+.ig-cmd:disabled { cursor: progress; }
+@media (hover: hover) and (pointer: fine) { .ig-cmd:hover:not(:focus) { background: rgb(255 255 255 / 0.08); color: var(--ink); } }
+
+/* ---------- Game card */
+.ig-game { display: grid; gap: 6px; }
+.ig-box { display: grid; place-items: end center; height: min(214px, 24dvh); margin-bottom: 10px; perspective: 1000px; }
+.ig-box .box3d { --h: min(196px, 22dvh, calc(196px / var(--ar))); }
+.ig-plat { display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--ink-2); }
+.ig-short { font-family: var(--f-display); font-weight: var(--fw-display); font-stretch: var(--fs-display); font-size: 1.15rem; color: oklch(0.82 0.12 var(--bh)); }
+.ig-title {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  overflow-wrap: anywhere; font-size: clamp(1.4rem, 2vw, 1.9rem); line-height: 1.1; text-wrap: balance;
+}
+.ig-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; margin: 12px 0 0; }
+.ig-stats div:first-child { grid-column: 1 / -1; }
+.ig-stats dt { font-size: 0.9rem; font-weight: 700; color: var(--ink-2); }
+.ig-stats dd { margin: 2px 0 0; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ig-stats div:first-child dd { font-size: 1.5rem; }
+
+/* ---------- Volume rocker: minus, a rising meter, plus, mute */
+.ig-rocker { display: flex; align-items: center; gap: 10px; }
+.ig-round {
+  display: grid; place-items: center; flex: none; width: 48px; height: 48px; border: 0; border-radius: 50%; cursor: pointer;
+  font-size: 1.3rem; background: rgb(255 255 255 / 0.1); transition: background-color 150ms ease, transform 160ms var(--ease);
+}
+.ig-round:active { transform: scale(0.94); }
+.ig-round[aria-pressed='true'] { background: rgb(255 255 255 / 0.85); color: var(--ink-dark); }
+.ig-meter { flex: 1; display: grid; grid-template-columns: repeat(10, 1fr); align-items: end; gap: 4px; height: 30px; transition: opacity 150ms ease; }
+.ig-meter i { height: calc(28% + var(--n) * 8%); border-radius: 3px; background: rgb(255 255 255 / 0.14); transition: background-color 120ms ease; }
+.ig-meter i[data-on] { background: #fff; }
+.ig-meter i:nth-child(1) { --n: 0; } .ig-meter i:nth-child(2) { --n: 1; } .ig-meter i:nth-child(3) { --n: 2; } .ig-meter i:nth-child(4) { --n: 3; }
+.ig-meter i:nth-child(5) { --n: 4; } .ig-meter i:nth-child(6) { --n: 5; } .ig-meter i:nth-child(7) { --n: 6; } .ig-meter i:nth-child(8) { --n: 7; }
+.ig-meter i:nth-child(9) { --n: 8; } .ig-meter i:nth-child(10) { --n: 9; }
+.ig-volume[data-muted] .ig-meter { opacity: 0.4; }
+
+/* ---------- Players */
+.ig-slots { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.ig-slots li { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: rgb(255 255 255 / 0.06); font-weight: 700; }
+.ig-slots li i { font-size: 1.3rem; }
+.ig-slots li[data-none] { color: var(--ink-2); background: none; box-shadow: inset 0 0 0 1px var(--surface-line); }
+.ig-slot-n { padding: 2px 7px; border-radius: 6px; font-size: 0.85rem; font-weight: 800; background: #fff; color: var(--ink-dark); }
+.ig-slots li[data-none] .ig-slot-n { background: rgb(255 255 255 / 0.16); color: var(--ink); }
+.ig-slot-name { min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.ig-slot-name small { display: block; font-size: 0.85rem; font-weight: 600; color: var(--ink-2); }
+.ig-link {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 10px 12px; border: 0; border-radius: 12px; cursor: pointer;
+  font: inherit; font-weight: 700; background: none;
+}
+
+/* ---------- Panels in the middle */
+.ig-panel {
+  display: grid; align-content: start; gap: 16px; width: min(100%, 760px); max-height: calc(100dvh - 210px); overflow: auto; overscroll-behavior: contain;
+  padding: 20px 26px 26px; border-radius: 20px;
+  transition: opacity 200ms ease, transform 300ms var(--ease), filter 200ms ease;
+}
+@starting-style { .ig-panel { opacity: 0; transform: translateY(18px) scale(0.98); filter: blur(4px); } }
+.ig-panel.out { opacity: 0; transform: translateY(10px) scale(0.985); filter: blur(2px); transition-duration: 140ms; }
+.ig-panel { background: oklch(0.19 0.03 var(--hue) / 0.97); }
+.ig-panel-controls { width: min(100%, 1000px); }
+.ig-panel-exit { width: min(100%, 540px); }
+.ig-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.ig-panel-head h2 { font-size: clamp(1.3rem, 2vw, 1.7rem); }
+.ig-x { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; cursor: pointer; font-size: 1.25rem; background: rgb(255 255 255 / 0.1); }
+.ig-note { color: var(--ink-2); max-width: 60ch; }
+.ig-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
+.ig-btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 50px; padding: 0 22px; border: 0; border-radius: 14px; cursor: pointer;
+  font: inherit; font-weight: 800; background: rgb(255 255 255 / 0.1); transition: transform 160ms var(--ease), opacity 150ms ease;
+}
+.ig-btn i { font-size: 1.2rem; }
+.ig-btn-go { background: var(--go); color: var(--ink-dark); }
+.ig-btn:active { transform: scale(0.97); }
+.ig-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* While a panel is open the rest of the dashboard waits, dimmed (it's inert). */
+.ingame[data-state='open'] .ig [inert] { opacity: 0.38; filter: saturate(0.6); transition: opacity 200ms ease, filter 200ms ease; transition-delay: 0s; }
+
+/* Load a state */
+.ig-states { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+.ig-states .ig-note { grid-column: 1 / -1; }
+.ig-state {
+  display: grid; gap: 8px; padding: 8px 8px 12px; border: 0; border-radius: 14px; cursor: pointer; text-align: left;
+  font: inherit; font-weight: 700; background: rgb(255 255 255 / 0.07); transition: transform 160ms var(--ease);
+}
+.ig-state:active { transform: scale(0.98); }
+.ig-state img { image-rendering: pixelated; } /* thumbnails are the console's own resolution */
+.ig-state :is(img, .ig-shot) { display: grid; place-items: center; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 8px; background: rgb(0 0 0 / 0.35); font-size: 1.6rem; color: var(--ink-2); }
+
+/* Controller mapping */
+.ig-ctl { display: grid; gap: 16px; }
+.ig-tabs, .ig-devices { display: flex; flex-wrap: wrap; gap: 8px; }
+.ig-devices { padding-bottom: 16px; border-bottom: 1px solid var(--surface-line); }
+.ig-chip {
+  display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border: 0; border-radius: 999px; cursor: pointer;
+  font: inherit; font-weight: 700; background: rgb(255 255 255 / 0.1); transition: background-color 150ms ease, transform 160ms var(--ease);
+}
+.ig-chip i { flex: none; font-size: 1.2rem; }
+.ig-chip { max-width: min(100%, 36ch); }
+.ig-chip span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ig-chip:active { transform: scale(0.97); }
+.ig-chip:is([aria-selected='true'], [aria-pressed='true']) { background: rgb(255 255 255 / 0.2); box-shadow: inset 0 0 0 2px #fff; }
+.ig-map { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 18px; }
+.ig-map-group { display: grid; gap: 6px; align-content: start; }
+.ig-map-group h3 { margin-bottom: 2px; font-family: var(--f-body); font-weight: 800; font-stretch: 100%; letter-spacing: 0; font-size: 0.95rem; color: var(--ink-2); }
+.ig-bind {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 44px; padding: 8px 12px; border: 0; border-radius: 10px; cursor: pointer;
+  font: inherit; font-size: 0.95rem; text-align: left; background: rgb(255 255 255 / 0.06);
+}
+.ig-bind-in { display: inline-flex; align-items: baseline; gap: 8px; min-width: 2.2em; font-weight: 800; }
+.ig-bind-as, .ig-map-group h3 small, .ig-ctl-title small { font-weight: 600; color: var(--ink-2); }
+.ig-bind[data-unused] { opacity: 0.55; } /* the emulated controller has nothing there */
+.ig-ctl-title { margin-bottom: -8px; font-family: var(--f-body); font-weight: 800; font-stretch: 100%; letter-spacing: 0; font-size: 0.95rem; }
+.ig-bind-in i { font-size: 1.15rem; }
+.ig-bind-out { min-width: 0; overflow-wrap: anywhere; text-align: right; font-weight: 700; color: var(--ink-2); }
+.ig-bind-out em { font-style: normal; font-weight: 600; opacity: 0.75; }
+.ig-bind { position: relative; overflow: hidden; }
+.ig-bind[data-waiting] { box-shadow: inset 0 0 0 2px var(--go); }
+.ig-bind[data-waiting]::after { content: ''; position: absolute; inset: auto 0 0; height: 3px; background: var(--ink); transform-origin: left; animation: ig-drain 6s linear forwards; }
+@keyframes ig-drain { to { transform: scaleX(0); } }
+.ig-ask { font-weight: 700; }
+/* Just bound: the new value steps in where "Premi un tasto…" was, and the yellow ring fades out. */
+.ig-bind[data-bound] .ig-bind-out { animation: ig-step 200ms var(--ease); }
+@keyframes ig-step { from { opacity: 0; transform: translateY(6px); } }
+.ig-bind[data-waiting] .ig-bind-out { color: var(--go); animation: ig-wait 1.1s ease-in-out infinite alternate; }
+@keyframes ig-wait { from { opacity: 0.55; } }
+
+/* Emulator options: categories on the left, the current branch on the right */
+.ig-opts { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 18px; }
+.ig-cats { display: grid; gap: 6px; align-content: start; }
+.ig-cat {
+  display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 14px; border: 0; border-radius: 12px; cursor: pointer;
+  font: inherit; font-weight: 700; text-align: left; background: none;
+}
+.ig-cat i { font-size: 1.25rem; }
+.ig-cat[aria-selected='true'] { background: rgb(255 255 255 / 0.12); }
+.ig-reset { margin-top: 10px; color: var(--ink-2); }
+.ig-opt-list { display: grid; gap: 8px; align-content: start; min-width: 0; }
+/* Long lists (core options, shaders) scroll under the breadcrumb; the padding keeps the focus ring unclipped */
+.ig-opt-items { display: grid; gap: 8px; max-height: min(52vh, 480px); overflow-y: auto; scrollbar-width: none; padding: 4px; margin: -4px; }
+.ig-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 4px; font-weight: 700; color: var(--ink-2); }
+.ig-crumbs i { font-size: 0.9rem; }
+.ig-opt {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; padding: 10px 16px; border: 0; border-radius: 12px; cursor: pointer;
+  font: inherit; font-weight: 700; text-align: left; background: rgb(255 255 255 / 0.06);
+}
+.ig-value.stepped { animation: ig-step-v 160ms var(--ease); }
+@keyframes ig-step-v { from { opacity: 0; transform: translateY(40%); } }
+.ig-value { flex: none; padding: 4px 12px; border-radius: 999px; font-size: 0.9rem; background: rgb(255 255 255 / 0.12); }
+.ig-opt > span:first-child { display: grid; gap: 2px; }
+.ig-opt small { font-size: 0.85rem; font-weight: 500; color: var(--ink-2); }
+.ig-opt:focus small { color: inherit; opacity: 0.7; }
+.ig-opt[aria-checked] { padding-left: 12px; justify-content: flex-start; }
+.ig-opt[aria-checked] > i { font-size: 1.2rem; opacity: 0; }
+.ig-opt[aria-checked='true'] > i { opacity: 1; }
+
+/* Press feedback for the pointer (the pad's A has no :active) */
+:is(.ig-bind, .ig-opt, .ig-cat, .ig-link, .ig-x) { transition: transform 160ms var(--ease), box-shadow 300ms ease; }
+:is(.ig-bind, .ig-opt, .ig-cat, .ig-link, .ig-x):active { transform: scale(0.98); }
+
+/* Focus: white fill plus the ring, readable from the sofa on every surface */
+:is(.ig-bind, .ig-opt, .ig-cat, .ig-state, .ig-chip, .ig-round, .ig-link, .ig-x, .ig-btn):focus { background: #fff; color: var(--ink-dark); }
+:is(.ig-bind, .ig-opt):focus :is(.ig-bind-out, .ig-bind-as, .ig-value) { color: var(--ink-dark); }
+.ig-opt:focus .ig-value { background: rgb(23 13 46 / 0.12); }
+.ig-btn-go:focus { background: var(--go); }
+.ig-chip:focus { box-shadow: var(--ring); } /* beats the selected outline: focus always shows */
+
+/* The corner button that opens the menu without a pad (touch, mouse). Out of the way while a pad plays. */
+.ig-fab {
+  position: fixed; top: calc(14px + env(safe-area-inset-top, 0px)); right: calc(14px + env(safe-area-inset-right, 0px)); z-index: 5;
+  display: grid; place-items: center; width: 52px; height: 52px; border: 0; border-radius: 50%; cursor: pointer;
+  font-size: 1.5rem; color: var(--ink); background: oklch(0.18 0.03 var(--hue) / 0.7);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); opacity: 0.6;
+  transition: opacity 200ms ease, transform 160ms var(--ease);
+}
+.ig-fab:active { transform: scale(0.94); }
+@media (hover: hover) and (pointer: fine) { .ig-fab:hover { opacity: 1; } }
+:root[data-input='pad'] .ig-fab, body[data-ingame] .ig-fab { opacity: 0; pointer-events: none; }
+
+/* Legend, toast, and the "paused" pill left on the game */
+.ig-hints { position: absolute; inset: auto var(--gutter) 28px auto; }
+.ig-toast {
+  position: absolute; left: 50%; bottom: 30px; translate: -50% 0; margin: 0; padding: 12px 22px; border-radius: 999px; pointer-events: none;
+  font-weight: 800; background: var(--go); color: var(--ink-dark); box-shadow: 0 4px 0 oklch(0.62 0.16 70);
+  opacity: 0; transform: translateY(12px); transition: opacity 160ms ease, transform 160ms var(--ease);
+}
+.ig-toast.on { opacity: 1; transform: none; transition-duration: 220ms, 320ms; }
+.ig-paused {
+  border: 0; cursor: pointer; font: inherit; color: var(--ink);
+  position: fixed; top: calc(16px + env(safe-area-inset-top, 0px)); left: 50%; z-index: 5; translate: -50% 0;
+  display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 10px 18px; border-radius: 999px;
+  font-weight: 800; background: oklch(0.18 0.03 var(--hue) / 0.86); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+.ig-paused span { font-weight: 600; color: var(--ink-2); }
+
+/* ---------- Choreography. Closed (and closing): out of place, fast, no stagger. Open: in, staggered. */
+.ig-bar, .ig-w, .ig-hints { opacity: 0; filter: blur(6px); transition: opacity 150ms ease, transform 200ms var(--ease), filter 150ms ease; }
+.ig-bar { transform: translateY(-36px) scale(0.97); }
+.ig-game, .ig-volume { transform: translateX(-48px); }
+.ig-players { transform: translateX(48px); }
+.ig-hints { transform: translateY(14px); }
+.ingame[data-state='open'] :is(.ig-bar, .ig-w, .ig-hints) {
+  opacity: 1; filter: none; transform: none;
+  transition: opacity 260ms ease var(--in), transform 480ms var(--ease) var(--in), filter 300ms ease var(--in);
+}
+.ig-bar { --in: 20ms; }
+.ig-game { --in: 90ms; }
+.ig-players { --in: 130ms; }
+.ig-volume { --in: 170ms; }
+.ig-hints { --in: 260ms; }
+.ig-box .box3d { transform: rotateY(-64deg) rotateX(10deg) scale(0.9); transition: transform 200ms var(--ease); }
+.ingame[data-state='open'] .ig-box .box3d { transform: none; transition: transform 760ms var(--spring) 150ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ig-bar, .ig-w, .ig-hints, .ig-box .box3d, .ig-panel { transform: none !important; filter: none !important; }
+  body[data-ingame] #game { transform: none; }
+}
+
+/* ---------- Variant "vetrina" (chosen in Opzioni, or play.html?menu=vetrina). The game's box stands in the middle on a lit plinth,
+   the only object on the set; the commands hang on two shelves either side, facing it, and the box turns toward the
+   shelf that has focus. Opening: the box rises spinning into place, then the spotlight comes on, then the commands
+   slide onto their shelves one by one. */
+.ingame[data-variant='vetrina'] .ig {
+  grid-template-columns: minmax(230px, 1fr) minmax(0, 1.25fr) minmax(230px, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  grid-template-areas: 'top top top' 'left box right' 'vol plat players' 'vol title players' 'vol stats players';
+  align-content: stretch; row-gap: 10px; padding-bottom: 92px;
+}
+[data-variant='vetrina'] .ig-top { grid-area: top; justify-self: center; margin: 0; }
+[data-variant='vetrina'] .ig-clock { margin: 0; padding: 0; border: 0; color: var(--ink-2); }
+[data-variant='vetrina'] .ig-game { display: contents; }
+
+/* The plinth: a spotlight from above in the console's hue, the box, its shadow on the floor */
+[data-variant='vetrina'] .ig-box {
+  grid-area: box; position: relative; isolation: isolate; align-self: stretch; height: auto; min-height: 220px; margin: 0;
+  display: grid; place-items: end center; padding-bottom: 26px; perspective: 1400px;
+}
+[data-variant='vetrina'] .ig-box::before {
+  content: ''; position: absolute; z-index: -1; inset: -12% -20% 0; pointer-events: none;
+  background: radial-gradient(40% 80% at 50% 0%, oklch(0.88 0.12 var(--bh) / 0.55), oklch(0.62 0.15 var(--bh) / 0.18) 55%, transparent 78%);
+  opacity: 0; transition: opacity 180ms ease;
+}
+[data-variant='vetrina'] .ig-box::after {
+  content: ''; position: absolute; z-index: -1; left: 50%; bottom: 8px; width: min(70%, 380px); height: 46px; translate: -50% 0; pointer-events: none;
+  background: radial-gradient(closest-side, rgb(4 0 18 / 0.75), transparent); filter: blur(5px); /* an object on the floor: the one blurred shadow */
+}
+[data-variant='vetrina'] .ig-box .box3d { --h: min(38vh, 380px, calc(28vw / var(--ar))); }
+
+[data-variant='vetrina'] .ig-plat { grid-area: plat; justify-self: center; }
+/* plain wrapping: Chrome puts the clamp's ellipsis mid-title when balance/pretty wrapping is on */
+[data-variant='vetrina'] .ig-title { grid-area: title; justify-self: center; max-width: 30ch; text-align: center; font-size: clamp(1.6rem, 2.6vw, 2.4rem); text-wrap: wrap; }
+[data-variant='vetrina'] .ig-stats { grid-area: stats; justify-self: center; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 32px; margin: 6px 0 0; text-align: center; }
+[data-variant='vetrina'] .ig-stats div:first-child dd { font-size: inherit; }
+
+/* The shelves: pill commands facing the box, their icon on the side nearest it */
+[data-variant='vetrina'] .ig-shelf { display: grid; align-content: center; gap: 12px; }
+[data-variant='vetrina'] .ig-shelf-l { grid-area: left; justify-items: end; }
+[data-variant='vetrina'] .ig-shelf-r { grid-area: right; justify-items: start; }
+[data-variant='vetrina'] .ig-shelf .ig-cmd {
+  display: inline-flex; align-items: center; gap: 12px; min-width: 0; height: 58px; padding: 0 24px; border-radius: 999px;
+  font-size: 1.1rem; color: var(--ink); background: oklch(0.19 0.03 var(--hue) / 0.78);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 4px 0 oklch(0.1 0.03 var(--hue) / 0.9);
+}
+[data-variant='vetrina'] .ig-shelf-l .ig-cmd { flex-direction: row-reverse; }
+[data-variant='vetrina'] .ig-shelf .ig-cmd i { font-size: 1.45rem; }
+[data-variant='vetrina'] .ig-shelf .ig-cmd:focus { background: #fff; box-shadow: var(--ring); }
+/* Both shelves hold four commands at the same heights, so up/down stay on a shelf and left/right cross over. */
+[data-variant='vetrina'] .ig-volume { grid-area: vol; align-self: end; }
+[data-variant='vetrina'] .ig-players { grid-area: players; align-self: end; }
+
+/* Choreography */
+[data-variant='vetrina'] :is(.ig-top, .ig-plat, .ig-title, .ig-stats, .ig-shelf .ig-cmd) {
+  opacity: 0; filter: blur(6px); transition: opacity 150ms ease, transform 200ms var(--ease), filter 150ms ease;
+}
+[data-variant='vetrina'] :is(.ig-plat, .ig-title, .ig-stats) { transform: translateY(14px); }
+[data-variant='vetrina'] .ig-top { transform: translateY(-12px); }
+[data-variant='vetrina'] .ig-shelf-l .ig-cmd { transform: translateX(-44px); }
+[data-variant='vetrina'] .ig-shelf-r .ig-cmd { transform: translateX(44px); }
+.ingame[data-variant='vetrina'][data-state='open'] :is(.ig-top, .ig-plat, .ig-title, .ig-stats, .ig-shelf .ig-cmd) {
+  opacity: 1; filter: none; transform: none;
+  transition: opacity 260ms ease var(--in), transform 480ms var(--ease) var(--in), filter 300ms ease var(--in);
+}
+[data-variant='vetrina'] .ig-top { --in: 300ms; }
+[data-variant='vetrina'] .ig-plat { --in: 380ms; }
+[data-variant='vetrina'] .ig-title { --in: 420ms; }
+[data-variant='vetrina'] .ig-stats { --in: 460ms; }
+[data-variant='vetrina'] .ig-shelf .ig-cmd:nth-child(1) { --in: 260ms; }
+[data-variant='vetrina'] .ig-shelf .ig-cmd:nth-child(2) { --in: 300ms; }
+[data-variant='vetrina'] .ig-shelf .ig-cmd:nth-child(3) { --in: 340ms; }
+[data-variant='vetrina'] .ig-shelf .ig-cmd:nth-child(4) { --in: 380ms; }
+[data-variant='vetrina'] .ig-volume { --in: 420ms; }
+[data-variant='vetrina'] .ig-players { --in: 420ms; }
+[data-variant='vetrina'] .ig-box .box3d { transform: translateY(26%) rotateY(-150deg) scale(0.82); }
+.ingame[data-variant='vetrina'][data-state='open'] .ig-box .box3d { transform: rotateY(var(--lean, 0deg)); transition: transform 820ms var(--spring) 40ms; }
+.ingame[data-variant='vetrina'][data-state='open'] .ig-box::before { opacity: 1; transition: opacity 420ms ease 240ms; } /* the light comes on once the box is in place */
+/* With a panel open the centrepiece waits too (its card is display: contents, so dim the pieces). */
+.ingame[data-variant='vetrina'][data-state='open'] .ig-game[inert] > * { opacity: 0.38; transition: opacity 200ms ease; transition-delay: 0s; }
+@media (prefers-reduced-motion: reduce) {
+  [data-variant='vetrina'] :is(.ig-top, .ig-plat, .ig-title, .ig-stats, .ig-shelf .ig-cmd) { transform: none !important; filter: none !important; }
+}
+
+/* ---------- Narrow screens: one column, the panel right under the bar */
+@media (max-width: 900px) {
+  .ingame { overflow: auto; }
+  .ig {
+    height: auto; min-height: 100%; overflow: visible; padding-bottom: 40px;
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: none; grid-template-areas: 'bar' 'stage' 'game' 'players' 'volume';
+  }
+  .ig-stage { grid-area: stage; }
+  .ingame[data-variant='vetrina'] .ig { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: none; grid-template-areas: 'top top' 'stage stage' 'box box' 'plat plat' 'title title' 'stats stats' 'left right' 'vol vol' 'players players'; }
+  [data-variant='vetrina'] .ig-box { min-height: 0; height: 240px; }
+  [data-variant='vetrina'] .ig-box .box3d { --h: min(200px, calc(70vw / var(--ar))); }
+  [data-variant='vetrina'] .ig-shelf { justify-items: stretch; }
+  [data-variant='vetrina'] .ig-shelf .ig-cmd { justify-content: center; padding: 0 12px; }
+  [data-variant='vetrina'] .ig-shelf-l .ig-cmd { flex-direction: row; }
+  .ig-bar { justify-self: stretch; display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); border-radius: 20px; }
+  .ig-clock, .ig-sep { display: none; }
+  .ig-cmd { min-width: 0; }
+  .ig-panel { max-height: none; }
+  .ig-map { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ig-opts { grid-template-columns: minmax(0, 1fr); }
+  .ig-game, .ig-volume, .ig-players { transform: translateY(24px); }
+}
+@media (max-width: 560px) {
+  .ig-map { grid-template-columns: minmax(0, 1fr); }
+}

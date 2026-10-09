@@ -1,0 +1,54 @@
+/* Gamepad keyboard. The host styles it through the --daisy-* variables. */
+.daisy {
+  position: fixed; z-index: 50; display: grid; justify-items: center; gap: 14px; width: 360px;
+  font-family: var(--daisy-font, system-ui, sans-serif); color: var(--daisy-ink, #fff);
+  transition: opacity 180ms ease-out, transform 240ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@starting-style { .daisy { opacity: 0; transform: translateY(-10px) scale(0.94); } }
+.daisy.out { opacity: 0; transform: translateY(-6px) scale(0.97); pointer-events: none; transition-duration: 150ms; }
+
+.daisy-wheel {
+  /* Disc radius 180; a petal reaches 108 + 42 x 1.08 = 153 at most, so nothing touches the rim. */
+  position: relative; width: 360px; height: 360px; border-radius: 50%;
+  background: var(--daisy-bg, #1d2333);
+  box-shadow: 0 10px 0 var(--daisy-edge, #0e121c), 0 30px 60px rgb(0 0 0 / 0.4);
+}
+.daisy-petal {
+  position: absolute; left: 50%; top: 50%; width: 84px; height: 84px; margin: -42px 0 0 -42px;
+  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); place-items: center;
+  border-radius: 50%; background: var(--daisy-petal, rgb(255 255 255 / 0.07));
+  transform: rotate(var(--a)) translateY(-108px) rotate(calc(-1 * var(--a)));
+  transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), background-color 140ms ease;
+}
+.daisy-key { font-weight: 800; font-size: 1.05rem; line-height: 1; cursor: pointer; }
+.daisy-key:nth-child(1) { grid-area: 2 / 1; }
+.daisy-key:nth-child(2) { grid-area: 1 / 2; }
+.daisy-key:nth-child(3) { grid-area: 2 / 3; }
+.daisy-key:nth-child(4) { grid-area: 3 / 2; }
+
+/* The petal under the stick: each character sits on the face button that types it */
+.daisy-petal[data-active] {
+  background: var(--daisy-accent-bg, rgb(255 255 255 / 0.18));
+  transform: rotate(var(--a)) translateY(-108px) rotate(calc(-1 * var(--a))) scale(1.08);
+}
+.daisy-petal[data-active] .daisy-key { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: #fff; }
+.daisy-petal[data-active] .daisy-key:nth-child(1) { background: #2f6fe4; }
+.daisy-petal[data-active] .daisy-key:nth-child(2) { background: #f2c200; color: #1d1600; }
+.daisy-petal[data-active] .daisy-key:nth-child(3) { background: #e0423f; }
+.daisy-petal[data-active] .daisy-key:nth-child(4) { background: #23a85b; }
+
+.daisy-mode {
+  position: absolute; left: 50%; top: 50%; translate: -50% -50%; padding: 6px 12px; border-radius: 999px;
+  font-weight: 800; font-size: 0.95rem; background: rgb(0 0 0 / 0.25);
+}
+
+.daisy-legend {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; margin: 0; padding: 8px 14px;
+  border-radius: 14px; font-size: 0.82rem; font-weight: 700; background: var(--daisy-bg, #1d2333);
+}
+.daisy-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.daisy-legend b { padding: 1px 6px; border-radius: 6px; font-size: 0.72rem; background: rgb(255 255 255 / 0.16); }
+
+@media (prefers-reduced-motion: reduce) {
+  .daisy, .daisy-petal { transition: none; }
+}

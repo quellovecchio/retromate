@@ -1,0 +1,456 @@
+/* RetroMate design system: "Vetrina". Every game is a physical box in a dim showroom, lit by a soft glow in the
+   hue of the console that has focus. Only games are objects: true 3D boxes (preserve-3d) at real packaging size.
+   Everything else is flat type and quiet cards. A camera flies between pages. DESIGN.md documents the rules. */
+
+@property --hue { syntax: '<number>'; inherits: true; initial-value: 292; }
+@property --bg-hue { syntax: '<number>'; inherits: false; initial-value: 292; }
+
+/* ---------- Tokens */
+:root {
+  /* Color. --hue is the console hue of whatever has focus (set by app.js). Surfaces are near-neutral and only
+     tinted by it; full console color appears in small doses (console labels, the backdrop glow). */
+  --hue: 292;
+  --ink: #fff;
+  --ink-2: rgb(255 255 255 / 0.8);
+  --ink-dark: #170d2e;
+  --go: #ffe14d;                       /* the one action color: pad glyphs, active field ring, logo */
+  --surface: rgb(255 255 255 / 0.06);
+  --surface-line: rgb(255 255 255 / 0.1);
+  --panel: oklch(0.21 0.02 var(--hue) / 0.7);
+  /* Focus: a dark gap, then white. Readable on every hue, never color alone (elements also move or straighten). */
+  --ring: 0 0 0 3px oklch(0.15 0.02 var(--hue)), 0 0 0 6px #fff;
+  /* Motion: ease for UI, spring only for physical objects settling (boxes, blocks, cards). */
+  --ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --spring: cubic-bezier(0.34, 1.32, 0.64, 1);  /* game boxes and fanned covers settling */
+  --settle: cubic-bezier(0.3, 1.12, 0.5, 1);   /* the selected cover-flow box: a smaller overshoot than --spring */
+  /* Layout */
+  --gutter: clamp(16px, 4vw, 56px);
+  --bar: 80px;                         /* the fixed top bar: focus scrolling keeps targets below it */
+  /* Gamepad keyboard (padtype.css) */
+  --daisy-bg: oklch(0.2 0.025 var(--hue));
+  --daisy-edge: oklch(0.12 0.02 var(--hue));
+  --daisy-petal: rgb(255 255 255 / 0.07);
+  --daisy-accent-bg: oklch(0.42 0.1 var(--hue));
+  --daisy-font: var(--f-display);
+  color-scheme: dark;
+}
+
+/* Type: five pairings, chosen in Opzioni (fonts.js sets data-fonts on <html>). Archivo's wide cut shares its family
+   with the body text. Each pairing sets the display face, its weight and width, and the body face. */
+[data-fonts] { --f-body: 'Archivo Variable', system-ui, sans-serif; --f-display: 'Archivo Variable', sans-serif; --fw-display: 900; --fs-display: 125%; --ls-display: 0; }
+[data-fonts='gabarito'] { --f-body: 'Gabarito Variable', system-ui, sans-serif; --f-display: 'Gabarito Variable', sans-serif; --fs-display: 100%; --ls-display: -0.01em; }
+[data-fonts='redhat'] { --f-body: 'Red Hat Text Variable', system-ui, sans-serif; --f-display: 'Red Hat Display Variable', sans-serif; --fs-display: 100%; --ls-display: -0.01em; }
+[data-fonts='funnel'] { --f-body: 'Funnel Sans Variable', system-ui, sans-serif; --f-display: 'Funnel Display Variable', sans-serif; --fw-display: 800; --fs-display: 100%; --ls-display: -0.01em; }
+[data-fonts='rubik'] { --f-body: 'Rubik Variable', system-ui, sans-serif; --f-display: 'Rubik Variable', sans-serif; --fw-display: 800; --fs-display: 100%; --ls-display: 0; }
+
+/* ---------- Base */
+* { box-sizing: border-box; }
+/* Phones: no tap flash, no font inflation, no pull-to-refresh fighting the app; content clears the notch. Clipping
+   on html too: on mobile, content overflowing sideways (the cover flow's outer boxes) widens the layout viewport
+   even when body clips it. */
+html { background: oklch(0.13 0.02 var(--hue)); -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; overscroll-behavior: none; overflow-x: clip; scrollbar-gutter: stable; scroll-padding-top: calc(var(--bar) + env(safe-area-inset-top, 0px)); }
+/* No visible scrollbars anywhere: pages still scroll with wheel, touch and focus moves. */
+* { scrollbar-width: none; }
+::-webkit-scrollbar { display: none; } /* Safari before 18.2 */
+body {
+  margin: 0; min-height: 100dvh; overflow-x: clip;
+  padding: env(safe-area-inset-top, 0px) max(var(--gutter), env(safe-area-inset-right, 0px)) 140px max(var(--gutter), env(safe-area-inset-left, 0px));
+  color: var(--ink); font-family: var(--f-body); font-size: 1.0625rem;
+}
+h1, h2, h3, p { margin: 0; }
+a, button { color: inherit; text-decoration: none; outline: none; touch-action: manipulation; }
+/* Controls are not content: a long press on a box or a pill must not select its label. */
+:is(.nav a, .logo, .console, .boxcard, .flow-item, .font-pick, .toggle, .choice, .retry, .hints, .game-play, .state, .modal-close) { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+::selection { background: var(--go); color: var(--ink-dark); }
+:where(a[href], button, input):focus { box-shadow: var(--ring); }
+/* Forced colors drop box-shadows: give focus a real outline there. */
+@media (forced-colors: active) { :focus { outline: 3px solid CanvasText; outline-offset: 3px; } }
+:where(a[href], button, input) { scroll-margin-block: 120px; }
+[hidden] { display: none !important; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* The showroom: dark and nearly neutral, with one soft glow in the hue of what has focus */
+.backdrop {
+  --bg-hue: var(--hue); /* the only place the hue animates: a non-inherited copy, so the rest of the page never recalculates per frame */
+  position: fixed; inset: 0; z-index: -1; transition: --bg-hue 800ms ease;
+  background:
+    radial-gradient(55% 42% at 50% 26%, oklch(0.42 0.11 var(--bg-hue) / 0.55), transparent 72%),
+    linear-gradient(180deg, oklch(0.2 0.03 var(--bg-hue)), oklch(0.13 0.02 var(--bg-hue)));
+}
+
+/* ---------- Top bar: logo, the tabs in the middle (LB/RB switch them), clock and controller state */
+.top {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 24px; height: var(--bar);
+}
+/* The bar's veil runs edge to edge (past the gutters) and up under the notch; content scrolls beneath it. */
+.top::before {
+  content: ''; position: absolute; z-index: -1; inset: calc(-1 * env(safe-area-inset-top, 0px)) calc(50% - 50vw) 0; /* exactly the viewport's width: wider would make the page scroll sideways */
+  background: oklch(0.13 0.02 var(--hue) / 0.8); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.logo { justify-self: start; display: inline-flex; font-size: 1.35rem; }
+.logo span:last-child { margin-left: 4px; padding: 0 8px; border-radius: 6px; background: var(--go); color: var(--ink-dark); }
+.nav { display: flex; align-items: center; gap: 6px; }
+.nav .pad-btn { margin: 0 6px; }
+:root:not([data-input='pad']) .nav .pad-btn { visibility: hidden; }
+.nav a {
+  display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px; border-radius: 999px;
+  font-weight: 700; background: rgb(255 255 255 / 0.1); transition: background-color 150ms ease, transform 160ms var(--ease);
+}
+.nav a:active { transform: scale(0.97); }
+.nav a i { font-size: 1.25rem; }
+.nav a[aria-current] { background: #fff; color: var(--ink-dark); }
+.status { justify-self: end; display: inline-flex; align-items: center; gap: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pad-state { display: inline-flex; font-size: 1.5rem; opacity: 0.5; }
+.pad-state[data-on] { opacity: 1; color: var(--go); }
+
+.scene { view-transition-name: scene; }
+.page-title { margin-top: 24px; font-size: clamp(2rem, 4vw, 3rem); }
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; background: rgb(0 0 0 / 0.35); font-size: 0.8rem; font-weight: 700; }
+
+/* ---------- Cover art (inside boxes, fans): image over a title fallback for missing box art */
+.cover { position: relative; display: grid; place-items: center; overflow: hidden; text-align: center; }
+.cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cover-fallback { padding: 10px; font-size: 0.8rem; line-height: 1.2; overflow-wrap: anywhere; }
+
+/* ---------- Box: six faces at the console's real proportions (--ar = w/h, --d = depth/h, from app.js) */
+.box3d {
+  --h: 300px;
+  --w: calc(var(--h) * var(--ar));
+  --dz: calc(var(--h) * var(--d));
+  position: relative; display: block; width: var(--w); height: var(--h); transform-style: preserve-3d;
+}
+.box3d .f { position: absolute; display: block; backface-visibility: hidden; }
+.box3d .front { inset: 0; transform: translateZ(calc(var(--dz) / 2)); background: oklch(0.3 0.04 var(--bh)); } /* seen only when the art is missing */
+.box3d .back { inset: 0; transform: rotateY(180deg) translateZ(calc(var(--dz) / 2)); background: color-mix(in oklab, var(--spine) 70%, #000); }
+.box3d :is(.spine, .side) { top: 0; height: 100%; width: var(--dz); left: calc(50% - var(--dz) / 2); }
+.box3d .spine { transform: rotateY(-90deg) translateZ(calc(var(--w) / 2)); display: grid; place-items: center; background: var(--spine); color: var(--spine-ink); }
+.box3d .side { transform: rotateY(90deg) translateZ(calc(var(--w) / 2)); background: color-mix(in oklab, var(--spine) 62%, #000); }
+.box3d :is(.top, .bottom) { left: 0; width: 100%; height: var(--dz); top: calc(50% - var(--dz) / 2); }
+.box3d .top { transform: rotateX(90deg) translateZ(calc(var(--h) / 2)); background: color-mix(in oklab, var(--spine) 78%, #fff); }
+.box3d .bottom { transform: rotateX(-90deg) translateZ(calc(var(--h) / 2)); background: color-mix(in oklab, var(--spine) 55%, #000); }
+.box3d .spine span {
+  writing-mode: vertical-rl; max-height: 92%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-weight: 700; font-size: clamp(9px, calc(var(--dz) * 0.3), 15px);
+}
+.box3d .cover { position: absolute; inset: var(--rim, 0); color: #fff; }
+.box3d .cover-fallback { position: absolute; inset: 0; display: grid; place-content: center; padding: 18% 9% 8%; font-size: max(12px, calc(var(--h) * 0.08)); line-height: 1.1; }
+.cover-band {
+  position: absolute; top: 0; left: 0; right: 0; padding: calc(var(--h) * 0.03) 7%; text-align: left;
+  font-family: var(--f-body); font-weight: 800; font-stretch: 100%; letter-spacing: 0.02em; font-size: max(9px, calc(var(--h) * 0.045));
+  background: oklch(0.4 0.12 var(--bh)); color: #fff;
+}
+/* Light: matte cardboard catches a soft edge; plastic cases get a rim and a gloss */
+.box3d .front::after { content: ''; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.25); background: linear-gradient(120deg, rgb(255 255 255 / 0.16), transparent 40%); }
+.box3d[data-kind='case'] { --rim: calc(var(--h) * 0.016); }
+.box3d[data-kind='case'] .front { background: #121218; }
+.box3d[data-kind='case'] .front::after {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
+  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.32) 42%, transparent 52%), linear-gradient(180deg, rgb(255 255 255 / 0.1), transparent 30%);
+}
+.box3d[data-kind='case'] :is(.side, .top, .bottom) { background: linear-gradient(90deg, #0d0d12, #26262e 50%, #0d0d12); }
+.box3d[data-white] .front { background: #e9e9ee; }
+.box3d[data-white] :is(.side, .top, .bottom) { background: linear-gradient(90deg, #c9c9d1, #f6f6f9 50%, #c9c9d1); }
+
+/* ---------- Home: rows of boxes (recently played, favorites), each a cover flow */
+.row-title { margin-top: 20px; font-size: 1.1rem; color: var(--ink-2); }
+.flow { --fh: clamp(190px, 34vh, 330px); position: relative; display: flex; justify-content: center; gap: 4px; height: calc(var(--fh) + 80px); perspective: 1400px; perspective-origin: 50% 40%; margin-top: 12px; }
+.flow::before {
+  content: ''; position: absolute; left: 50%; bottom: 18px; width: min(560px, 80vw); height: 70px; translate: -50% 0;
+  background: radial-gradient(closest-side, rgb(255 255 255 / 0.16), transparent); filter: blur(6px);
+}
+/* Each link is a fixed 4px slot in order (what nav.js measures); only its .flow-vis moves. Focusing a slot scrolls
+   its whole row (title above, box and caption below) into view. */
+.flow-item { display: block; width: 4px; height: 4px; scroll-margin-block: 80px calc(var(--fh) + 200px); }
+.flow-item:focus { box-shadow: none; }
+.flow-vis {
+  position: absolute; left: 50%; top: 24px; height: var(--fh); display: grid; align-items: end; transform-style: preserve-3d; z-index: var(--zi);
+  transform: translateX(-50%) translateX(var(--x, 0px)) translateZ(var(--z, 0px)) rotateY(var(--ry, 0deg));
+  transition: transform 320ms var(--ease);
+}
+/* A landscape box (art wider than tall) is never wider than a square one: it gets shorter instead, standing on the shelf. */
+.flow-vis .box3d { --h: min(var(--fh), calc(var(--fh) / var(--ar))); }
+.flow-item[data-current] .flow-vis { transition: transform 420ms var(--settle); }
+.flow-item[data-current] .box3d { animation: sway 7s ease-in-out infinite; }
+.flow-item:focus[data-current] .box3d .front::before {
+  content: ''; position: absolute; inset: -6px; z-index: -1; border-radius: 4px; box-shadow: 0 0 0 3px #fff, 0 18px 50px rgb(10 0 40 / 0.45);
+}
+.flow-caption { display: grid; justify-items: center; gap: 6px; min-height: 120px; text-align: center; }
+.flow-plat { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; color: var(--ink-2); }
+.flow:has([data-current][data-fav]) + .flow-caption .flow-title::before, .boxcard[data-fav] .boxcard-title::before { content: '★ '; color: var(--go); }
+.flow-title {
+  max-width: 24ch; overflow-wrap: anywhere; font-size: clamp(1.6rem, 3.4vw, 2.6rem); line-height: 1.1; text-wrap: balance;
+}
+
+/* ---------- Loading, empty and error states */
+.loading { margin-top: 30vh; text-align: center; font-weight: 700; color: var(--ink-2); animation: breathe 1.2s ease-in-out infinite alternate; }
+@keyframes breathe { from { opacity: 0.45; } }
+.empty {
+  display: grid; justify-items: center; gap: 6px; max-width: 520px; margin: 48px auto 0; padding: 32px 24px;
+  border: 2px dashed rgb(255 255 255 / 0.3); border-radius: 20px; text-align: center;
+}
+.empty i { font-size: 44px; margin-bottom: 6px; }
+.empty p:first-of-type { font-weight: 700; font-size: 1.15rem; }
+.empty p + p { color: var(--ink-2); }
+.empty code { font-size: 0.95em; }
+.retry {
+  margin-top: 14px; height: 52px; padding: 0 26px; border: 0; border-radius: 14px; cursor: pointer;
+  font: inherit; font-weight: 800; background: var(--go); color: var(--ink-dark); transition: transform 160ms var(--ease);
+}
+.retry:active { transform: scale(0.97); }
+
+/* ---------- Consoles: quiet flat cards. The console's color is in the label and, on focus, a faint tint; its games
+   fan out of the top edge (games are the only objects). */
+.console {
+  position: relative; display: grid; align-content: end; gap: 2px; min-height: 150px; padding: 18px 20px; border-radius: 16px;
+  background: var(--surface); box-shadow: inset 0 0 0 1px var(--surface-line);
+  transition: transform 220ms var(--ease), background-color 220ms ease;
+}
+.console-short { font-size: 2.4rem; line-height: 1; color: oklch(0.8 0.12 var(--bh)); }
+.console-name { margin-top: 8px; font-size: 1.1rem; font-weight: 700; }
+.console-count { font-size: 0.95rem; color: var(--ink-2); }
+a.console:focus { transform: translateY(-4px); background: oklch(0.3 0.05 var(--bh) / 0.6); box-shadow: inset 0 0 0 1px oklch(0.8 0.12 var(--bh) / 0.45), var(--ring); }
+a.console:active { transform: scale(0.98); }
+@media (hover: hover) and (pointer: fine) { a.console:hover { background: rgb(255 255 255 / 0.09); } }
+
+.fan { position: absolute; left: -30px; right: -30px; bottom: 100%; height: 170px; overflow: hidden; pointer-events: none; }
+.fan-card {
+  position: absolute; left: 50%; bottom: 0; width: 92px; aspect-ratio: 3 / 4; margin-left: -46px; border-radius: 4px; overflow: hidden;
+  background: oklch(0.26 0.03 var(--bh)); box-shadow: 0 10px 20px rgb(0 0 0 / 0.35);
+  transform: translateY(calc(100% - 22px)); transform-origin: 50% 120%; transition: transform 360ms var(--spring);
+}
+.fan-card .cover { position: absolute; inset: 0; }
+.fan-card .cover-fallback { font-size: 0.6rem; }
+.fan-card:nth-child(1) { --r: -14deg; --fx: -70px; }
+.fan-card:nth-child(2) { --r: 0deg; --fx: 0px; transition-delay: 30ms; }
+.fan-card:nth-child(3) { --r: 14deg; --fx: 70px; transition-delay: 60ms; }
+.console:focus .fan-card { transform: translateX(var(--fx)) translateY(8px) rotate(var(--r)); }
+
+.strip-row { display: flex; flex-wrap: wrap; gap: 120px 34px; padding: 96px 0 0 2px; }
+.strip-row .console { flex: 0 0 220px; min-height: 130px; }
+.strip-row .fan { height: 118px; }
+.strip-row .fan-card { width: 70px; margin-left: -35px; }
+.strip-row .fan-card:nth-child(1) { --fx: -54px; }
+.strip-row .fan-card:nth-child(3) { --fx: 54px; }
+
+/* ---------- Library: search, then the consoles */
+.search {
+  display: flex; align-items: center; gap: 12px; max-width: 560px; height: 60px; margin-top: 20px; padding: 0 20px;
+  border-radius: 16px; font-size: 1.15rem; background: rgb(0 0 0 / 0.28);
+  box-shadow: inset 0 0 0 1px var(--surface-line);
+}
+.search i { font-size: 1.5rem; }
+.search input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; outline: none; }
+.search input:focus { box-shadow: none; }
+.search input::placeholder { color: rgb(255 255 255 / 0.85); font-weight: 400; }
+.search:focus-within { background: rgb(0 0 0 / 0.36); box-shadow: inset 0 0 0 2px #fff, 0 0 0 4px oklch(0.15 0.02 var(--hue)), 0 0 0 7px var(--go); }
+.lib-results { display: grid; gap: 18px; margin-top: 28px; }
+.results-count { font-weight: 700; color: var(--ink-2); }
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 150px 28px; padding: 150px 0 40px; }
+.lib-grid .console { min-height: 180px; }
+.lib-grid .console-short { font-size: 3rem; }
+
+/* ---------- Console page: a type-only header, showcase box, grid of boxes */
+.plat-head { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 20px; margin-top: 24px; }
+.plat-head .console-short { grid-row: span 2; font-size: clamp(2.6rem, 5vw, 3.6rem); }
+.plat-title { font-size: clamp(1.5rem, 2.8vw, 2.2rem); line-height: 1.1; }
+.plat-body { display: grid; grid-template-columns: minmax(260px, 0.7fr) 2fr; gap: clamp(24px, 4vw, 64px); margin-top: 32px; }
+.plat-games { display: grid; gap: 18px; align-content: start; }
+.plat-games .search { margin-top: 0; }
+.showcase { position: sticky; top: calc(var(--bar) + 24px); align-self: start; display: grid; justify-items: center; gap: 10px; text-align: center; }
+.showcase-stage { --bh2: clamp(200px, 42vh, 380px); container-type: inline-size; position: relative; display: grid; place-items: center; width: 100%; height: calc(var(--bh2) + 70px); perspective: 1200px; }
+.showcase-stage::after {
+  content: ''; position: absolute; left: 50%; bottom: 6px; width: 70%; height: 46px; translate: -50% 0; z-index: -1;
+  background: radial-gradient(closest-side, rgb(10 0 40 / 0.55), transparent);
+}
+.turntable { transform-style: preserve-3d; animation: sway 8s ease-in-out infinite; }
+.turntable .box3d { --h: min(var(--bh2), calc(84cqw / var(--ar))); } /* a wide box never outgrows the column */
+.showcase-title { overflow-wrap: anywhere; font-size: clamp(1.3rem, 2.2vw, 1.9rem); line-height: 1.15; text-wrap: balance; max-width: 22ch; min-height: 2.3em; }
+.showcase-hint { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ink-2); }
+
+/* Boxes in a grid: turned slightly to show the spine at rest, squared up to face you when selected. */
+.covers { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 22px 18px; align-content: start; }
+/* content-visibility: the browser skips boxes off screen, so a 2,500-game console scrolls smoothly. It clips
+   paint to the card, which is why the focus ring is inset. */
+.boxcard {
+  display: grid; justify-items: center; align-content: start; gap: 4px; padding: 10px 0 14px; border-radius: 14px; text-align: center;
+  content-visibility: auto; contain-intrinsic-size: auto 270px;
+}
+.boxcard-stage { display: grid; place-items: end center; height: 196px; perspective: 900px; }
+.boxcard .box3d { --h: min(160px, calc(160px / var(--ar))); transform: rotateY(30deg) rotateX(10deg); transition: transform 340ms var(--spring); }
+.boxcard:focus .box3d { transform: rotateY(0deg) rotateX(0deg) scale(1.06); }
+@media (hover: hover) and (pointer: fine) { .boxcard:hover .box3d { transform: rotateY(0deg) rotateX(0deg) scale(1.06); } }
+.boxcard:focus { box-shadow: inset 0 0 0 3px #fff; }
+.boxcard-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 8px; padding: 0 8px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+
+/* ---------- Options */
+.panel {
+  display: grid; gap: 18px; max-width: 1180px; margin-top: 28px; padding: 26px 28px 30px; border-radius: 20px;
+  background: var(--panel); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
+}
+.panel h2 { font-size: 1.3rem; }
+.panel-note { margin-top: -10px; color: var(--ink-2); }
+.font-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.font-pick {
+  display: grid; justify-items: start; gap: 4px; padding: 18px 20px; border: 0; border-radius: 16px; cursor: pointer;
+  font-family: var(--f-body); text-align: left; background: rgb(255 255 255 / 0.08);
+  transition: background-color 150ms ease, transform 160ms var(--ease);
+}
+.font-pick:active { transform: scale(0.97); }
+.font-pick-display { font-family: var(--f-display); font-weight: var(--fw-display); font-stretch: var(--fs-display); letter-spacing: var(--ls-display); font-size: 1.7rem; line-height: 1.1; } /* one line even in Archivo's wide cut */
+.font-pick-body { font-weight: 700; }
+.font-pick-name { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--ink-2); }
+.font-pick-name i { display: none; color: var(--go); font-size: 1.1rem; }
+.font-pick[aria-pressed='true'] { background: rgb(255 255 255 / 0.2); box-shadow: inset 0 0 0 2px var(--go); }
+.font-pick[aria-pressed='true'] .font-pick-name i { display: inline; }
+.font-pick:focus { box-shadow: var(--ring); }
+.font-pick[aria-pressed='true']:focus { box-shadow: inset 0 0 0 2px var(--go), var(--ring); }
+
+/* Choice pills: one of several values (Wii language). The chosen one is white, like the current tab. */
+.choices { display: flex; flex-wrap: wrap; gap: 10px; }
+.choice {
+  height: 46px; padding: 0 18px; border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 700;
+  background: rgb(255 255 255 / 0.08); transition: background-color 150ms ease, transform 160ms var(--ease);
+}
+.choice:active { transform: scale(0.97); }
+.choice[aria-pressed='true'] { background: #fff; color: var(--ink-dark); }
+
+/* A switch: label and current state on the left, a track on the right (yellow when on). */
+.toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 24px; max-width: 560px; padding: 18px 20px;
+  border: 0; border-radius: 16px; cursor: pointer; font: inherit; text-align: left; background: rgb(255 255 255 / 0.08);
+  transition: background-color 150ms ease, transform 160ms var(--ease);
+}
+.toggle:active { transform: scale(0.97); }
+.toggle-text { display: grid; gap: 4px; }
+.toggle-title { font-weight: 700; }
+.toggle-note { font-size: 0.85rem; color: var(--ink-2); }
+.toggle-track { position: relative; flex: none; width: 52px; height: 30px; border-radius: 999px; background: rgb(255 255 255 / 0.2); transition: background-color 150ms ease; }
+.toggle-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: translate 200ms var(--ease); }
+.toggle[aria-checked='true'] .toggle-track { background: var(--go); }
+.toggle[aria-checked='true'] .toggle-track::after { translate: 22px 0; background: var(--ink-dark); }
+
+/* ---------- Modal: a <dialog> over a dimmed, blurred set. The panel lifts in and drops away; the figure beside it
+   (an object the opener carries in, like a game box) doesn't fade, so it can fly in and out. */
+.modal {
+  display: flex; align-items: center; gap: clamp(24px, 4vw, 64px); max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px);
+  padding: 0; border: 0; overflow: visible; background: none; color: var(--ink);
+  transition: display 300ms allow-discrete, overlay 300ms allow-discrete;
+}
+.modal::backdrop {
+  background: oklch(0.1 0.02 var(--hue) / 0.72); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  transition: opacity 300ms ease, display 300ms allow-discrete, overlay 300ms allow-discrete;
+}
+.modal:not([open])::backdrop { opacity: 0; }
+@starting-style { .modal[open]::backdrop { opacity: 0; } }
+.modal-panel {
+  position: relative; display: grid; align-content: start; gap: 12px; width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px);
+  overflow: auto; overscroll-behavior: contain; padding: 30px 32px 32px; border-radius: 20px;
+  background: oklch(0.21 0.025 var(--hue) / 0.94); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 30px 80px rgb(0 0 0 / 0.5);
+  transition: opacity 220ms ease, translate 300ms var(--ease), scale 300ms var(--ease);
+}
+.modal:not([open]) .modal-panel { opacity: 0; translate: 0 18px; scale: 0.97; }
+@starting-style { .modal[open] .modal-panel { opacity: 0; translate: 0 18px; scale: 0.97; } }
+.modal-figure { flex: none; transform-origin: top left; perspective: 1200px; transition: opacity 200ms ease; }
+.modal:not([open]) .modal-figure { opacity: 0; }
+.modal-figure .box3d { --h: min(340px, 52dvh, calc(300px / var(--ar))); animation: sway 8s ease-in-out infinite; }
+.modal-close {
+  position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 50%;
+  cursor: pointer; font-size: 1.3rem; background: rgb(255 255 255 / 0.1); transition: background-color 150ms ease, transform 160ms var(--ease);
+}
+.modal-close:active { transform: scale(0.94); }
+
+/* The game card (inside a modal) */
+.game-plat { display: inline-flex; align-items: center; gap: 10px; padding-right: 52px; font-weight: 700; color: var(--ink-2); }
+.game-title { padding-right: 40px; overflow-wrap: anywhere; font-size: clamp(1.6rem, 3vw, 2.4rem); line-height: 1.08; text-wrap: balance; }
+.game-time { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ink-2); }
+.game-play {
+  justify-self: start; display: inline-flex; align-items: center; gap: 10px; height: 56px; margin-top: 8px; padding: 0 30px; border-radius: 14px;
+  font-weight: 800; font-size: 1.15rem; background: var(--go); color: var(--ink-dark); transition: transform 160ms var(--ease);
+}
+.game-play:active { transform: scale(0.97); }
+.game-plays { display: flex; flex-wrap: wrap; gap: 0 12px; }
+.game-play-alt { background: rgb(255 255 255 / 0.1); color: var(--ink); } /* the console's in-browser core (PS2: Play!) */
+.game-states-title { margin-top: 14px; font-size: 1.1rem; }
+.game-states { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.game-note { grid-column: 1 / -1; color: var(--ink-2); }
+.state { display: grid; gap: 6px; padding: 8px 8px 10px; border-radius: 12px; font-size: 0.9rem; font-weight: 700; background: rgb(255 255 255 / 0.07); }
+.state img { image-rendering: pixelated; } /* state thumbnails are the console's own resolution */
+.state :is(img, .state-shot) { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 6px; background: rgb(0 0 0 / 0.35); }
+
+/* ---------- Notice: a hinged sign that drops from the top edge */
+.notice {
+  position: fixed; inset: env(safe-area-inset-top, 0px) auto auto 50%; z-index: 10; overflow: visible; border: 0; max-width: min(560px, calc(100vw - 32px));
+  margin: 0; padding: 16px 24px; border-radius: 0 0 16px 16px; translate: -50% 0; font-weight: 800;
+  background: var(--go); color: var(--ink-dark); box-shadow: 0 20px 40px rgb(0 0 0 / 0.4);
+  transform-origin: top center; transition: transform 460ms var(--spring), opacity 200ms ease;
+}
+@starting-style { .notice { transform: perspective(600px) rotateX(-90deg); opacity: 0; } }
+.notice.out { transform: perspective(600px) rotateX(-90deg); opacity: 0; transition: transform 200ms var(--ease), opacity 200ms ease; }
+
+/* ---------- Controller legend */
+.hints { /* a popover, so it can sit in the top layer above an open modal */
+  position: fixed; inset: auto var(--gutter) calc(28px + env(safe-area-inset-bottom, 0px)) auto; margin: 0; border: 0; color: var(--ink); display: flex; gap: 24px; padding: 10px 18px; border-radius: 999px;
+  font-weight: 700; font-size: 0.95rem; background: oklch(0.18 0.02 var(--hue) / 0.8); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+.hints span { display: inline-flex; align-items: center; gap: 8px; }
+.pad-btn { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; font-size: 0.8rem; font-weight: 800; background: var(--go); color: var(--ink-dark); }
+.pad-btn-wide { width: auto; padding: 0 8px; border-radius: 8px; background: #fff; }
+.hints > span:not(:first-child) .pad-btn { background: #fff; }
+:root:not([data-input='pad']) .hints { opacity: 0.7; }
+
+/* ---------- Display face, last so it wins over the per-component sizes above */
+:is(h1, h2, h3, .logo, .flow-title, .game-title, .console-short, .showcase-title, .cover-fallback) {
+  font-family: var(--f-display); font-weight: var(--fw-display); font-stretch: var(--fs-display); letter-spacing: var(--ls-display);
+}
+
+/* ---------- Camera between pages (View Transitions): deeper flies forward through the old page, back pulls away.
+   Also across documents: launching a game flies into it, returning pulls back out (app.js sets data-vt). */
+@view-transition { navigation: auto; }
+::view-transition-group(*) { animation-duration: 560ms; animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1); }
+::view-transition-old(scene), ::view-transition-new(scene) { animation-duration: 560ms; animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1); animation-fill-mode: both; }
+html[data-vt='in']::view-transition-old(scene) { animation-name: cam-pass; }
+html[data-vt='in']::view-transition-new(scene) { animation-name: cam-arrive; }
+html[data-vt='out']::view-transition-old(scene) { animation-name: cam-recede; }
+html[data-vt='out']::view-transition-new(scene) { animation-name: cam-return; }
+/* A setting that restyles the whole page (fonts) gets a plain, short crossfade. */
+html[data-vt='fade']::view-transition-group(*),
+html[data-vt='fade']::view-transition-old(scene), html[data-vt='fade']::view-transition-new(scene) { animation-duration: 200ms; }
+@keyframes cam-pass { to { opacity: 0; transform: perspective(900px) translateZ(300px); filter: blur(8px); } }
+@keyframes cam-arrive { from { opacity: 0; transform: perspective(900px) translateZ(-480px) rotateX(12deg); } }
+@keyframes cam-recede { to { opacity: 0; transform: perspective(900px) translateZ(-480px) rotateX(-10deg); } }
+@keyframes cam-return { from { opacity: 0; transform: perspective(900px) translateZ(300px); filter: blur(8px); } }
+@keyframes sway {
+  0%, 100% { transform: rotateY(0) rotateX(0); }
+  30% { transform: rotateY(-16deg) rotateX(5deg); }
+  70% { transform: rotateY(12deg) rotateX(2deg); }
+}
+
+/* ---------- Play page */
+body.play { height: 100dvh; padding: 0; overflow: hidden; background: #000; }
+#game { width: 100vw; height: 100dvh; }
+#game:has(> :is(video, canvas)) { display: grid; place-items: center; }
+#game > :is(video, canvas) { width: 100%; height: 100%; object-fit: contain; }
+.msg { position: fixed; inset: 0; display: grid; place-items: center; margin: 0; color: var(--ink-2); font-weight: 700; }
+.toast { position: fixed; top: 1rem; left: 50%; translate: -50%; margin: 0; padding: 0.5rem 1rem; border-radius: 999px; background: #000c; color: var(--ink); font-size: 0.85rem; }
+
+/* ---------- Reduced motion: no flying, swaying or springing; state changes stay instant and visible */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+  @view-transition { navigation: none; }
+}
+
+@media (max-width: 760px) {
+  :root { --bar: 112px; } /* logo, then the tabs on one line of their own */
+  .top { display: flex; height: auto; flex-wrap: wrap; gap: 12px; padding: 14px 0 8px; }
+  .nav .pad-btn { display: none; }
+  .nav { width: 100%; }
+  .nav a { flex: 1; justify-content: center; height: 44px; padding: 0 8px; }
+
+  .status, .hints { display: none; }
+  .modal { flex-direction: column; gap: 16px; }
+  .modal-figure .box3d { --h: min(170px, 26dvh, calc(150px / var(--ar))); }
+  .plat-body { grid-template-columns: 1fr; }
+  .showcase { display: none; } /* on a phone the grid is the page; the showcase only repeated the first game */
+  .lib-grid { gap: 160px 32px; }
+}

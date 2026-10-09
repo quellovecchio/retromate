@@ -1,0 +1,55 @@
+# Overrides merged on top of cloud-game's default config (pkg/config/config.yaml upstream).
+emulator:
+  libretro:
+    cores:
+      list:
+        # LRPS2 (PCSX2 for libretro). Needs an OpenGL context: cloud-game creates it via GLX on Xvfb.
+        # BIOS: library/bios/ps2/*.bin -> libretro/system/pcsx2/bios (see docker-compose.yml)
+        ps2:
+          lib: pcsx2_libretro
+          folder: ps2
+          roms: ["iso", "chd", "cso", "zso", "ciso", "m3u", "cue", "elf"]  # as reported by the core
+          isGlAllowed: true
+          vfr: true
+          # cloud-game calls context_destroy after retro_deinit: LRPS2 then spins forever and the worker hangs on close
+          hacks: ["skip_hw_context_destroy"]
+          # cloud-game passes only these options to the core (no defaults), so the BIOS must be named here
+          options:
+            pcsx2_bios: ps2-0230e-20080220.bin  # file name in library/bios/ps2
+            # the DualShock 2 boots in digital mode (sticks off) and libretro has no ANALOG button to press
+            pcsx2_analog_mode1: enabled
+            pcsx2_analog_mode2: enabled
+        # Dolphin (Wii). OpenGL core profile, created the same way as LRPS2's. Its Sys files are baked into the image
+        # (stream/Dockerfile); its User folder (Wii NAND, game saves) is library/saves/cloud-game (docker-compose.yml).
+        # The emulated RAM lives in /dev/shm, hence shm_size there: Docker's 64 MB default ends in SIGBUS.
+        wii:
+          lib: dolphin_libretro
+          folder: wii
+          roms: ["iso", "wbfs", "rvz", "gcz", "ciso", "wia"]
+          isGlAllowed: true
+          vfr: true
+          hacks: ["skip_hw_context_destroy"]  # same deinit hang risk as LRPS2
+          # Dolphin leaves a port empty until the frontend names a device: port 1 = Classic Controller Pro
+          # ((5 << 8) | 1), a pad laid out like ours. Games that only take the Wii Remote (Need for Speed ProStreet)
+          # get another one from the in-game menu's Controller panel, saved per game (retromate_device).
+          hid:
+            0: [1281]
+          options:
+            # Wii system language (Dolphin's numbering: 1 English, 2 German, 3 French, 4 Spanish, 5 Italian...).
+            # This is the default; RetroMate sends the one chosen in Opzioni with each start (or the one saved for
+            # the game from the in-game menu's options).
+            dolphin_language: "5"
+          # everything not listed keeps the core's default (Hardware renderer, native 640x528, JIT64)
+encoder:
+  video:
+    list:
+      vp8:
+        # Upstream defaults with these changes. 20 Mbit/s instead of 3.2: the stream is LAN-only and PS2 games are full
+        # of fine detail. static-threshold=0 instead of 100: above it libvpx skips macroblocks that change "too little",
+        # so low-contrast textures (FIFA 14's pitch) froze into 16x16 squares that were never refreshed.
+        # max-quantizer=40 instead of 63 and undershoot=50 instead of 100: dark scenes and gradients (Kingdom Hearts)
+        # broke into JPEG-like blocks; this caps the worst quality per frame, at the cost of overshooting the bitrate.
+        params: >-
+          keyframe-mode=disabled tuning=ssim cpu-used=6 target-bitrate=20000000 deadline=1 sharpness=1 end-usage=cbr
+          static-threshold=0 max-quantizer=40
+          error-resilient=default+partitions overshoot=20 undershoot=50

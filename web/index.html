@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="theme-color" content="#24135c">
+  <title>RetroMate</title>
+</head>
+<body data-daisy-host>
+  <div class="backdrop" aria-hidden="true"></div>
+  <header class="top">
+    <a class="logo" href="#/" aria-label="RetroMate, Home"><span>Retro</span><span>Mate</span></a>
+    <nav class="nav" aria-label="Sezioni" data-row>
+      <b class="pad-btn pad-btn-wide" aria-hidden="true">LB</b>
+      <a href="#/options"><i class="ph ph-sliders-horizontal" aria-hidden="true"></i>Opzioni</a>
+      <a href="#/"><i class="ph ph-house" aria-hidden="true"></i>Home</a>
+      <a href="#/library"><i class="ph ph-books" aria-hidden="true"></i>Libreria</a>
+      <b class="pad-btn pad-btn-wide" aria-hidden="true">RB</b>
+    </nav>
+    <span class="status">
+      <time data-clock></time>
+      <span class="pad-state" data-pad><i class="ph ph-game-controller" aria-hidden="true"></i><span class="sr-only" data-pad-label>Nessun controller</span></span>
+    </span>
+  </header>
+  <main class="scene"><p class="loading" role="status">Carico la libreria…</p></main>
+  <div class="hints" aria-hidden="true" popover="manual">
+    <span><b class="pad-btn" data-btn="ok">A</b><span data-hint-a>Gioca</span></span>
+    <span data-hint-x hidden><b class="pad-btn">X</b><span data-hint-x-label></span></span>
+    <span data-hint-b><b class="pad-btn" data-btn="back">B</b>Indietro</span>
+  </div>
+  <script type="module" src="/src/app.js"></script>
+</body>
+</html>
