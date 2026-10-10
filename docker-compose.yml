@@ -17,19 +17,20 @@ services:
       bash -c "rm -f /tmp/.X99-lock /tmp/.X11-unix/X99; Xvfb :99 -screen 0 320x240x24 -nolisten tcp &
       ./coordinator & while [ ! -S /tmp/.X11-unix/X99 ]; do sleep 0.1; done; ./worker"
     ports: ["8100:8000", "8443:8443/udp"]
+    # the library: ./library, or RETROMATE_LIBRARY from .env (the same variable server.py reads)
     volumes:
-      - ./library/roms:/usr/local/share/cloud-game/assets/games:ro
-      - ./library/bios/ps2:/usr/local/share/cloud-game/libretro/system/pcsx2/bios # rw: the core writes NVRAM/MEC files there
+      - ${RETROMATE_LIBRARY:-./library}/roms:/usr/local/share/cloud-game/assets/games:ro
+      - ${RETROMATE_LIBRARY:-./library}/bios/ps2:/usr/local/share/cloud-game/libretro/system/pcsx2/bios # rw: the core writes NVRAM/MEC files there
       - ./stream/config.yaml:/usr/local/share/cloud-game/configs/config.yaml:ro
       - cores:/usr/local/share/cloud-game/assets/cores
       - saves:/root/.cr
       # the cores' save directory: Dolphin's User folder (Wii NAND, game saves, shader cache) lives here
-      - ./library/saves/cloud-game:/usr/local/share/cloud-game/libretro/legacy_save
+      - ${RETROMATE_LIBRARY:-./library}/saves/cloud-game:/usr/local/share/cloud-game/libretro/legacy_save
       # PS2 memory cards: LRPS2 keeps them in its system folder, not the save one; without this they lived in the
       # container and every recreate (docker compose up after a build) handed out blank cards
-      - ./library/saves/ps2/memcards:/usr/local/share/cloud-game/libretro/system/pcsx2/memcards
+      - ${RETROMATE_LIBRARY:-./library}/saves/ps2/memcards:/usr/local/share/cloud-game/libretro/system/pcsx2/memcards
       # save states, next to the browser games' ones: the worker writes {platform}/{game}/{ms}.state (stream/cloud-game.patch)
-      - ./library/states:/usr/local/share/cloud-game/states
+      - ${RETROMATE_LIBRARY:-./library}/states:/usr/local/share/cloud-game/states
     restart: unless-stopped
 
 volumes: { cores: {}, saves: {} }

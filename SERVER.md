@@ -23,8 +23,17 @@ Before pasting a multi-line block, run `sudo -v`: otherwise `sudo` asks for the 
 - **Storage:** whole disk with LVM, **no encryption** (it asks for a passphrase at every boot, and there is no screen).
   The installer gives the root (`ubuntu-lv`) only 100 GB of the volume group (`ubuntu-vg`) and leaves the rest free.
   Set `ubuntu-lv` to 150 GB (Edit -> Size), then on `ubuntu-vg` choose Create Logical Volume: name `data`, the rest
-  of the space (or leave ~50 GB free to grow either later), ext4, mounted at `/srv/retromate`. The project and its
-  library go there (section 14): a full library can't fill the system disk.
+  of the space (or leave ~50 GB free to grow either later), ext4, mounted at `/data` (choose *Other* in the mount
+  list and type it: the list also offers `/home`, which is easy to pick by mistake). Application data goes there
+  (RetroMate's library and database, section 14): a full library can't fill the system disk.
+  Ended up on `/home` (`lsblk` shows `ubuntu--vg-data` on `/home`)? Don't move it over SSH (your SSH key lives in
+  `/home`): show a folder of it as `/data` instead.
+
+  ```
+  sudo mkdir -p /home/data /data
+  echo '/home/data /data none bind 0 0' | sudo tee -a /etc/fstab
+  sudo systemctl daemon-reload && sudo mount /data && findmnt /data
+  ```
 - **OpenSSH server:** yes.
 - **Featured snaps:** none, **especially not Docker**.
 - **Third-party drivers:** no, the driver is installed by hand (section 5).
@@ -172,8 +181,8 @@ No suspend or hibernation; the driver stays initialized, so games start faster.
 
 ## 11. Library and firewall
 
-- **Library:** it lives in the project folder, `/srv/retromate/library` (section 14), on the `data` volume. Copy ROMs
-  from Windows with WinSCP, `scp` or `rsync`.
+- **Library:** `/data/retromate/library` (section 14), on the `data` volume, copied from Windows over Samba
+  (section 15).
 - **Firewall:** on a LAN behind a router, just don't forward any port to the server. With `ufw`, note that Docker's
   published ports (8100, 8443/udp) bypass it.
 
@@ -185,8 +194,8 @@ sudo ufw enable
 
 ## 12. Backups
 
-Worth keeping: `library/saves`, `library/states`, `library/options`, `library/controls` and `retromate.db`. ROMs can
-be copied again. A periodic `rsync` to another machine or a NAS is enough.
+Worth keeping, all in `/data/retromate`: `library/saves`, `library/states`, `library/options`, `library/controls` and
+`retromate.db`. ROMs can be copied again. A periodic `rsync` to another machine or a NAS is enough.
 
 ## 13. Headless Xorg on the GPU
 
@@ -194,20 +203,18 @@ cloud-game creates its OpenGL context with GLX, so it needs an X server, and the
 renders. The image's Xvfb only knows Mesa's software renderer: on this host the stream uses the host's own Xorg
 running on the NVIDIA driver, no monitor needed (display `:0`; `docker-compose.nvidia.yml` shares its socket).
 
+Xorg wants the GPU's PCI address in **decimal**, while `nvidia-smi` prints it in hexadecimal (`00000000:10:00.0` is
+`PCI:16:0:0`, not `PCI:10:0:0`): the first lines convert it.
+
 ```
 sudo apt install -y xserver-xorg-core mesa-utils
-nvidia-smi --query-gpu=pci.bus_id --format=csv,noheader
-```
-
-The second command prints something like `00000000:01:00.0`: bus `01`, device `00`, function `0`. Xorg wants them in
-**decimal**: `PCI:1:0:0` (a bus `0a` would be `PCI:10:0:0`). Put it in the `BusID` line below:
-
-```
-sudo tee /etc/X11/xorg.conf <<'EOF'
+IFS=':.' read -r _ b d f <<< "$(nvidia-smi --query-gpu=pci.bus_id --format=csv,noheader)"
+BUSID=$(printf 'PCI:%d:%d:%d' 0x$b 0x$d 0x$f); echo $BUSID
+sudo tee /etc/X11/xorg.conf <<EOF
 Section "Device"
     Identifier "nvidia"
     Driver     "nvidia"
-    BusID      "PCI:1:0:0"
+    BusID      "$BUSID"
     Option     "AllowEmptyInitialConfiguration" "true"
 EndSection
 Section "Screen"
@@ -238,20 +245,26 @@ DISPLAY=:0 glxinfo -B | grep -E 'renderer|version'
 ```
 
 The last line must name the GPU (`OpenGL renderer string: NVIDIA GeForce RTX 3070/PCIe/SSE2`), not `llvmpipe`.
-If it doesn't, `journalctl -u xorg-headless` and `/var/log/Xorg.0.log` say why: a wrong `BusID` is the usual one, or
-the driver's Xorg module is missing (`/usr/lib/xorg/modules/drivers/nvidia_drv.so`: it comes with the full
-`nvidia-driver-*-open` package of section 5, not with the `-server`/headless ones).
+A monitor plugged into the server goes black with a blinking cursor: that is virtual terminal 7, where Xorg runs with
+nothing to show. Ctrl+Alt+F1 goes back to the text console.
+If it doesn't, `journalctl -u xorg-headless` and `/var/log/Xorg.0.log` say why: a wrong `BusID` is the usual one
+("Start request repeated too quickly": Xorg exits at once). When it works, the log has `NVIDIA(0)` lines ending with
+`[DRI2] Setup complete`. The NVIDIA Xorg module comes with the full `nvidia-driver-*-open` package of section 5, not
+with the `-server`/headless ones (Ubuntu keeps it in `/usr/lib/x86_64-linux-gnu/nvidia/xorg/`).
 
 ## 14. RetroMate
 
-The project lives in `/srv/retromate` (the `data` volume), library included. The Python and Node tools are only needed
-on the host for the API and to build the UI; the stream server runs in Docker.
+The code lives in `/srv/retromate`, the data in `/data/retromate`: the library (`roms`, `bios`, `saves`, `states`,
+`options`, `controls`) and the database. Both the API and Docker Compose find the data through `RETROMATE_LIBRARY`
+and `RETROMATE_DB` in the project's `.env` (without them: `library/` and `retromate.db` in the project folder). The
+Python and Node tools are only needed on the host for the API and to build the UI; the stream server runs in Docker.
 
-The volume already holds `lost+found`, so `git clone` refuses it: fetch into it instead. A private repository asks for
-a GitHub token (or use an SSH key with the `git@github.com:` URL).
+Fetching into the folder instead of `git clone` also works when it is the root of a volume (`lost+found` makes
+`git clone` refuse it). A private repository asks for a GitHub token (or use an SSH key with the `git@github.com:` URL).
 
 ```
-sudo chown $USER: /srv/retromate
+sudo mkdir -p /srv/retromate /data/retromate/library
+sudo chown $USER: /srv/retromate /data/retromate /data/retromate/library
 cd /srv/retromate
 git init -b main
 git remote add origin https://github.com/quellovecchio/retromate.git
@@ -271,16 +284,27 @@ npm --prefix web run build
 
 Vite needs Node 20.19+ or 22.12+ (`node -v`); if Ubuntu's is older, install Node from NodeSource instead.
 
-Copy the library from Windows into `/srv/retromate/library` (same layout: `roms`, `bios`, `saves`, `states`,
-`options`, `controls`). Then tell Docker Compose to use the NVIDIA override and where the browser reaches the stream:
+The host's settings, in `.env` (not versioned): Docker Compose with the NVIDIA override, where the browser reaches
+the stream, and where the data is.
 
 ```
-printf 'COMPOSE_FILE=docker-compose.yml:docker-compose.nvidia.yml\nSTREAM_HOST_IP=%s\n' "$(ip route get 1.1.1.1 | grep -o 'src [0-9.]*' | cut -d' ' -f2)" > .env
+cat > .env <<EOF
+COMPOSE_FILE=docker-compose.yml:docker-compose.nvidia.yml
+STREAM_HOST_IP=$(ip route get 1.1.1.1 | grep -o 'src [0-9.]*' | cut -d' ' -f2)
+RETROMATE_LIBRARY=/data/retromate/library
+RETROMATE_DB=/data/retromate/retromate.db
+EOF
 cat .env
+```
+
+`STREAM_HOST_IP` must be the server's LAN address (check the `cat`). Copy the library from Windows (section 15), then
+start the stream server:
+
+```
 docker compose up -d --build
 ```
 
-`STREAM_HOST_IP` must be the server's LAN address (check the `cat`). The API as a service, listening on the LAN:
+The API as a service, listening on the LAN, with the same `.env`:
 
 ```
 sudo tee /etc/systemd/system/retromate.service <<EOF
@@ -292,6 +316,7 @@ Wants=network-online.target
 [Service]
 User=$USER
 WorkingDirectory=/srv/retromate
+EnvironmentFile=/srv/retromate/.env
 ExecStart=$HOME/.local/bin/uv run --frozen uvicorn server:app --host 0.0.0.0 --port 8000
 Restart=always
 
@@ -311,3 +336,42 @@ prints it: `Video Info: NVIDIA Corporation, NVIDIA GeForce RTX 3070...`):
 ```
 docker compose logs cloud-game | grep -i -E 'video info|renderer'
 ```
+
+## 15. Copying the library over Samba
+
+A network share on `/data/retromate`, to drag and drop from Windows. Files written through it belong to your user,
+like everything else in the folder.
+
+```
+sudo apt install -y samba
+sudo tee -a /etc/samba/smb.conf <<EOF
+
+[retromate]
+   path = /data/retromate
+   valid users = $USER
+   force user = $USER
+   read only = no
+   create mask = 0644
+   directory mask = 0755
+EOF
+sudo smbpasswd -a $USER
+sudo systemctl restart smbd
+sudo ufw allow Samba
+```
+
+`smbpasswd` asks for a Samba password (it can differ from the login one). The last line opens the firewall of
+section 11: without it Windows answers "network name not found" (error 0x80070043) although SSH works.
+
+On Windows, open `\\SERVER_IP\retromate` in Explorer (or *Map network drive* to keep it as a drive letter), sign in
+with your server user name and the Samba password, and drop the contents of the project's `library` folder into
+`library` there. For tens of GB `robocopy` is sturdier than drag and drop: it resumes after an interruption and copies
+in parallel (PowerShell, adapt the source path):
+
+```
+robocopy C:\Progetti\Altro\retromate\library \\SERVER_IP\retromate\library /E /Z /MT:8
+```
+
+Over wired gigabit expect roughly 100 MB/s (90 GB in about 15 minutes); Wi-Fi is much slower. Copy the database too
+(`retromate.db` from the project folder into `\\SERVER_IP\retromate`) to keep play time, favourites and recent games:
+if RetroMate already runs on the server, stop it first (`sudo systemctl stop retromate`) so it doesn't overwrite the
+file you drop in, then start it again.

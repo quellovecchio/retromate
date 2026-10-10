@@ -24,6 +24,9 @@ the old process alive: restart the `api` server after editing `server.py`.
 
 ## Architecture
 
+- Where the data lives: `RETROMATE_LIBRARY` (default `library/`) and `RETROMATE_DB` (default `retromate.db`), read by
+  `server.py` and by `docker-compose.yml`'s volumes, set per host in the unversioned `.env` (the Linux server's
+  systemd unit loads the same file, `SERVER.md`).
 - `server.py` is the whole backend. The `PLATFORMS` table maps each slug (same slugs as RomM) to display name,
   libretro-thumbnails system name, `runner` and EmulatorJS `core`. Library layout follows RomM:
   `library/roms/{slug}/{file}` or one folder per game (`library/roms/{slug}/{Game}/{file}`, `.m3u` preferred).
