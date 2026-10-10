@@ -21,15 +21,13 @@ ADD https://buildbot.libretro.com/assets/system/Dolphin.zip /tmp/Dolphin.zip
 RUN apt-get install -y --no-install-recommends unzip && unzip -q /tmp/Dolphin.zip -d /dolphin
 
 FROM ${BASE}
-# System Mesa instead of the image's bundled llvmpipe-only libGL: same software fallback, plus GPU drivers
-# (d3d12 for Docker Desktop/WSL2, see docker-compose.wsl.yml). It needs an X server with GLX: Xvfb.
+# GL goes through glvnd (libgl1), which picks the driver of the X server it talks to:
+# - Docker Desktop/WSL2: Xvfb in this container + system Mesa, d3d12 on the GPU (docker-compose.wsl.yml);
+#   Mesa replaces the image's bundled llvmpipe-only libGL, which stays the fallback without it.
+#   (Mesa 26.2.4 from the kisak PPA was tried: Dolphin hung at boot. Ubuntu's 26.0.8 it is.)
+# - Linux with the NVIDIA driver: the host's Xorg, the NVIDIA libraries mounted by nvidia-container-toolkit
+#   (docker-compose.nvidia.yml, SERVER.md). Mesa is unused there.
 # libxi6, libegl1, libusb: linked by the Dolphin core (Wii), even though it renders through cloud-game's GLX context.
-# Mesa from the kisak-mesa PPA (latest stable) instead of Ubuntu's: test whether a newer d3d12 driver renders
-# Burnout 3 / NFS ProStreet right (Ubuntu's 26.0.8 doesn't, llvmpipe does).
-ADD https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xEB8B81E14DA65431D7504EA8F63F0F2B90935439 /etc/apt/keyrings/kisak.asc
-# http: the image has no CA certificates; apt still checks the PPA's GPG signature
-RUN chmod 644 /etc/apt/keyrings/kisak.asc && echo "deb [signed-by=/etc/apt/keyrings/kisak.asc] \
-    http://ppa.launchpadcontent.net/kisak/kisak-mesa/ubuntu resolute main" > /etc/apt/sources.list.d/kisak-mesa.list
 RUN rm -f /usr/lib/x86_64-linux-gnu/libGL.so* && apt-get update && \
     apt-get install -y --no-install-recommends libgl1 libglx-mesa0 libgl1-mesa-dri xvfb         libxi6 libegl1 libegl-mesa0 libusb-1.0-0 && \
     rm -rf /var/lib/apt/lists/*

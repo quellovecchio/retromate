@@ -126,8 +126,12 @@ the old process alive: restart the `api` server after editing `server.py`.
 - PSX runs in the browser (EmulatorJS `psx`, pcsx_rearmed). EmulatorJS downloads one file, so the scan takes
   `.chd/.pbp/.bin`, never `.cue`/`.m3u`: multi-track games lose CD audio, multi-disc ones play disc 1.
 - `docker-compose.wsl.yml` is WSL2-only (GPU via Mesa d3d12 on `/dev/dxg`), loaded only where the unversioned `.env`
-  says `COMPOSE_FILE=docker-compose.yml;docker-compose.wsl.yml` (this Windows machine). A dedicated Linux host with
-  native NVIDIA drivers is set up as in `SERVER.md`.
+  says `COMPOSE_FILE=docker-compose.yml;docker-compose.wsl.yml` (this Windows machine). Its d3d12 translation renders
+  some effects wrong (Burnout 3's white block, NFS ProStreet's missing cars; llvmpipe renders them right).
+  `docker-compose.nvidia.yml` is for a dedicated Linux host with the NVIDIA driver (`SERVER.md`, its `.env` uses `:`
+  as separator): no Xvfb, the worker talks GLX to the host's headless Xorg (`xorg-headless.service`, display `:0`,
+  socket mounted) and nvidia-container-toolkit mounts the driver's libraries, so GL is native. cloud-game creates its
+  GL context with GLX only (`graphics/rgfw.go`, no EGL), hence an X server either way; it has no Vulkan support.
 - `stream/config.yaml` overrides cloud-game's defaults. At start cloud-game passes only the core options listed
   there plus the start request's (no core defaults), which is why `pcsx2_bios` must name a file in `library/bios/ps2`.
   The VP8 encoder runs at 20 Mbit/s with `static-threshold=0` (upstream: 3.2 Mbit/s and 100, which froze FIFA 14's

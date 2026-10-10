@@ -18,7 +18,8 @@ npm-debug.log*
 .env.*
 .claude/settings.local.json
 
-# Editors and OS
+# Editors and OS (lost+found: the Linux server keeps the project at the root of its own volume, SERVER.md)
+lost+found/
 .vscode/
 .idea/
 Thumbs.db

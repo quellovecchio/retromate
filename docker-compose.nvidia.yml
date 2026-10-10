@@ -1,0 +1,16 @@
+# Linux host with the NVIDIA driver (SERVER.md): OpenGL straight on the GPU, no Mesa, no Xvfb. The host runs a
+# headless Xorg on the NVIDIA driver (display :0, xorg-headless.service); the worker talks GLX to it through its
+# socket, and nvidia-container-toolkit mounts the driver's libraries and devices (the same version as the host's).
+# Loaded by .env on that host: COMPOSE_FILE=docker-compose.yml:docker-compose.nvidia.yml
+services:
+  cloud-game:
+    runtime: nvidia
+    environment:
+      - DISPLAY=:0
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all # graphics (OpenGL/GLX) is not in the compute-only default
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    # no Xvfb: wait for the host's Xorg (it may come up after Docker at boot)
+    command: >-
+      bash -c "./coordinator & while [ ! -S /tmp/.X11-unix/X0 ]; do sleep 0.5; done; ./worker"
