@@ -315,10 +315,24 @@ index dd83b21..b54fe5e 100644
  	if val, ok := lib.games[name]; ok {
  		val.Base = lib.config.path
 diff --git a/pkg/network/websocket/websocket.go b/pkg/network/websocket/websocket.go
-index 5b3d3fe..86843c5 100644
+index 5b3d3fe..d85a6c7 100644
 --- a/pkg/network/websocket/websocket.go
 +++ b/pkg/network/websocket/websocket.go
-@@ -149,9 +149,21 @@ func (c *Connection) reader() {
+@@ -13,8 +13,11 @@ import (
+ 
+ const (
+ 	maxMessageSize = 1 * 1024 * 1024
+-	pingTime       = pongTime * 9 / 10
+-	pongTime       = 7 * time.Second
++	// RetroMate: upstream pinged every 6.3 s and gave up 7 s after the last pong, leaving a pong 0.7 s to arrive: a
++	// browser whose link was busy with the game's own 20 Mbit/s stream answered one late after minutes of play, the
++	// coordinator dropped it and the game closed. Now a pong may be up to 15 s late.
++	pingTime       = 5 * time.Second
++	pongTime       = 20 * time.Second
+ 	writeWait      = 5 * time.Second
+ )
+ 
+@@ -149,9 +152,21 @@ func (c *Connection) reader() {
  			return err
  		})
  	}
@@ -340,7 +354,7 @@ index 5b3d3fe..86843c5 100644
  			if websocket.IsUnexpectedCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
  				if c.errorHandler != nil {
  					c.errorHandler(err)
-@@ -161,7 +173,7 @@ func (c *Connection) reader() {
+@@ -161,7 +176,7 @@ func (c *Connection) reader() {
  			}
  			break
  		}

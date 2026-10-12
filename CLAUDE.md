@@ -113,7 +113,8 @@ the old process alive: restart the `api` server after editing `server.py`.
   unloading (libretro's and RetroArch's order; Dolphin hung the worker on close, or with it skipped the NVIDIA driver
   lost the GPU), no default pixel format for cores that never set one (RPCS3: 0 bytes per pixel, panic sizing the GL
   read buffer; now XRGB8888 for GL cores), coordinator-to-worker calls timing out after 10 s (now 2 min: RPCS3's first start installs the
-  firmware), slot leak on failed start, rescan on unknown game,
+  firmware), slot leak on failed start, rescan on unknown game, a WebSocket pong allowed 15 s late instead of 0.7 s
+  (a browser busy receiving the stream answered one late and the coordinator closed the game),
   `RETRO_DEVICE_ID_JOYPAD_MASK`, early `retro_serialize_size` crashing Dolphin, game loads blocking the WebSocket
   read loop so slow-loading games timed out the coordinator link, per-launch core options in the start request,
   core options read and changed at run time (the core's own declarations, any libretro API version: GetOptions 115

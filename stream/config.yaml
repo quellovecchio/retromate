@@ -88,12 +88,14 @@ encoder:
     # out), so params start with the element itself. formats (stream/cloud-game.patch): nvh264enc takes the core's
     # RGB frames as they are and converts them to YUV on the GPU, so the CPU's videoconvertscale passes them through
     # (I420, cloud-game's default, nvh264enc doesn't even take). Same 20 Mbit/s as VP8; ultra-low-latency, no
-    # B-frames, no periodic keyframes (gop-size=-1: cloud-game forces one every keyframeInterval frames, SPS/PPS
-    # included); vbv-buffer-size ~3 frames at 60 fps, so those keyframes aren't starved into blocks. Constrained
+    # B-frames. gop-size=120: a keyframe every 2 s at 60 fps. cloud-game forces periodic keyframes only when the
+    # params say keyframe-mode=disabled (VP8's), and ignores the browser's requests for one, so with an endless GOP
+    # one lost packet froze the picture for good while the sound went on. vbv-buffer-size ~3 frames at 60 fps, so
+    # the keyframes aren't starved into blocks. Constrained
     # baseline: every WebRTC H.264 decoder takes it (the AUDs, which the RTP packetizer drops anyway, are off).
     h264:
       formats: "{ BGRx, BGRA, RGBx, RGBA }"
       params: >-
         nvh264enc name=video_enc preset=p4 tune=ultra-low-latency rc-mode=cbr bitrate=20000 vbv-buffer-size=1000
-        gop-size=-1 zerolatency=true repeat-sequence-header=true aud=false
+        gop-size=120 zerolatency=true repeat-sequence-header=true aud=false
       caps: video/x-h264,stream-format=byte-stream,alignment=au,profile=constrained-baseline
