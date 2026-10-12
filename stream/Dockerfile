@@ -30,7 +30,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends git ca-certific
     meson ninja-build python3 libglib2.0-dev liborc-0.4-dev libopus-dev libvpx-dev
 RUN git clone --single-branch --depth 1 --branch 1.29.2 https://gitlab.freedesktop.org/gstreamer/gstreamer.git /gst
 WORKDIR /gst
-RUN sed -i '1i if get_option('"'"'doc'"'"').disabled()\n  subdir_done()\nendif' subprojects/gst-plugins-good/docs/meson.build && \
+# the official build's fix for good's docs (they fail with -Ddoc=disabled), needed by bad's too
+RUN sed -i '1i if get_option('"'"'doc'"'"').disabled()\n  subdir_done()\nendif' \
+    subprojects/gst-plugins-good/docs/meson.build subprojects/gst-plugins-bad/docs/meson.build && \
     meson setup builddir --prefix=/usr/local --buildtype=release -Doptimization=3 -Db_lto=true \
     -Dauto_features=disabled -Dextra-checks=disabled -Dbenchmarks=disabled -Dtools=disabled -Dgstreamer:tools=disabled \
     -Dbase=enabled -Dgood=enabled -Dbad=enabled -Dugly=disabled -Dlibav=disabled -Dges=disabled -Drtsp_server=disabled \
