@@ -179,6 +179,29 @@ sudo systemctl enable --now nvidia-persistenced
 
 No suspend or hibernation; the driver stays initialized, so games start faster.
 
+CPU governor `performance` instead of Ubuntu's `powersave`: RPCS3 (PS3) and LRPS2 lose speed when the CPU ramps its
+clock up slowly. Idle cores still sleep, so idle power grows by a few watts at most. A service sets it at every boot:
+
+```
+sudo tee /etc/systemd/system/cpu-performance.service <<'EOF'
+[Unit]
+Description=CPU governor performance (emulators)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable --now cpu-performance
+cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor | sort | uniq -c
+```
+
+The last line must print `16 performance` (one per CPU thread). Undo with
+`sudo systemctl disable --now cpu-performance` and a reboot.
+
 GPU power cap: Ampere cards draw short spikes well above their rated power, and a power supply that can't follow
 drops the card off the bus mid-game (`dmesg` shows `Xid 79`: "GPU has fallen off the bus"). A lower power limit and a
 clock cap (the RTX 3070 defaults to 220 W) remove most of the spikes for a few percent of speed. `nvidia-smi` forgets

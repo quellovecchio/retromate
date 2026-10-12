@@ -149,6 +149,15 @@ the old process alive: restart the `api` server after editing `server.py`.
 - PS2 memory cards (`Mcd001.ps2`, `Mcd002.ps2`, shared by every game) are in `library/saves/ps2/memcards`, mounted on
   LRPS2's `system/pcsx2/memcards`. Anything a core writes outside a mounted folder dies with the container: check where
   a new core keeps its saves before trusting it.
+- DS (EmulatorJS `nds`, melonDS) and PSP (`psp`, PPSSPP) run in the browser. PPSSPP needs threads: `threads=True` in
+  `PLATFORMS`, `play.js` reloads the page as `play.html?...&threads`, which `isolate()` (and vite) serve cross-origin
+  isolated, and sets `EJS_threads`. PPSSPP has no SRAM: its in-game saves are memory stick folders
+  (`PSP/SAVEDATA` beside EmulatorJS's save file), so `memstick()` in `play.js` empties the memory stick at start, fills
+  it with the server's `library/saves/psp/{game}.tar` and uploads a tar of it at every flush: one game's folders per
+  tar. 3DS has no EmulatorJS core.
+- GameCube (`ngc`) streams on the Wii's Dolphin core, its own entry in `stream/config.yaml` because port 1 takes the
+  GameCube pad (`hid: 0: [1]`). Same User folder, so its memory cards sit beside the Wii NAND; `dolphin_language`
+  from Opzioni sets its language too (PAL games).
 - PSX runs in the browser (EmulatorJS `psx`, pcsx_rearmed). EmulatorJS downloads one file, so the scan takes
   `.chd/.pbp/.bin`, never `.cue`/`.m3u`: multi-track games lose CD audio, multi-disc ones play disc 1.
 - `docker-compose.wsl.yml` is WSL2-only (GPU via Mesa d3d12 on `/dev/dxg`), loaded only where the unversioned `.env`

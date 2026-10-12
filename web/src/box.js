@@ -14,7 +14,10 @@ export const CASES = {
   snes: { mm: [160, 195, 29], kind: 'card', hue: 352, short: 'SNES' },
   genesis: { mm: [152, 195, 25], kind: 'case', hue: 222, short: 'MD' },
   psx: { mm: [142, 125, 10], kind: 'case', hue: 200, short: 'PS1' }, // CD jewel case
+  nds: { mm: [125, 137, 14], kind: 'case', hue: 172, short: 'DS' },
+  psp: { mm: [105, 175, 14], kind: 'case', hue: 236, short: 'PSP' }, // UMD case
   ps2: { mm: [135, 190, 15], kind: 'case', hue: 258, short: 'PS2' },
+  ngc: { mm: [135, 190, 14], kind: 'case', hue: 268, short: 'GC' }, // DVD keep case
   wii: { mm: [135, 190, 14], kind: 'case', white: true, hue: 60, short: 'Wii' }, // white DVD keep case
   ps3: { mm: [135, 170, 12], kind: 'case', hue: 214, short: 'PS3' }, // Blu-ray keep case
 };

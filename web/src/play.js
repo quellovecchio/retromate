@@ -52,7 +52,10 @@ if (!res.ok) {
   fetch(`/api/games/${game.id}/played`, { method: 'POST' });
   playtime(game.id);
 
-  if (game.runner === 'browser') {
+  if (game.threads && !self.crossOriginIsolated) {
+    // PPSSPP needs SharedArrayBuffer: reload as play.html?threads, which the server isolates.
+    location.replace(`${location.pathname}${location.search}&threads${location.hash}`);
+  } else if (game.runner === 'browser') {
     msg.remove();
     Object.assign(window, {
       EJS_player: '#game',
@@ -61,6 +64,7 @@ if (!res.ok) {
       EJS_gameName: game.title,
       EJS_pathtodata: EJS_DATA,
       EJS_startOnLoaded: true,
+      EJS_threads: !!game.threads,
       EJS_onGameStart: () => saves(game, window.EJS_emulator, params.get('state')),
     });
     document.body.append(Object.assign(document.createElement('script'), { src: EJS_DATA + 'loader.js' }));
@@ -98,28 +102,7 @@ async function saves(game, ejs, state) {
   const gm = ejs.gameManager;
   const api = `/api/games/${game.id}`;
 
-  // In-game save (SRAM): the server copy replaces whatever this browser had. None on the server yet: keep the
-  // browser's (saves made before this existed) and upload it at the first flush.
-  const sav = await fetch(`${api}/save`);
-  if (sav.ok) {
-    const path = gm.getSaveFilePath();
-    let dir = '';
-    for (const part of path.split('/').slice(1, -1)) if (!gm.FS.analyzePath((dir += '/' + part)).exists) gm.FS.mkdir(dir);
-    gm.FS.writeFile(path, new Uint8Array(await sav.arrayBuffer()));
-    gm.loadSaveFiles();
-  }
-  // EmulatorJS emits saveSaveFiles with the file whenever it flushes the core's SRAM (its own timer, or ours below).
-  let last;
-  let upload = Promise.resolve();
-  ejs.on('saveSaveFiles', (data) => {
-    if (!data?.length || (last && last.length === data.length && last.every((b, i) => b === data[i]))) return;
-    // A game never saved has blank SRAM (all 0xFF or 0x00): never let it replace a real save on the server.
-    if (data.every((b) => b === data[0]) && (data[0] === 0xff || data[0] === 0)) return;
-    last = data.slice();
-    // keepalive lets a small save finish even if the page is closing (browsers cap it at 64 KB).
-    upload = fetch(`${api}/save`, { method: 'PUT', body: last, keepalive: last.length < 60000 }).catch(() => {});
-  });
-  const flush = () => { try { gm.saveSaveFiles(); } catch {} return upload; };
+  const flush = game.platform === 'psp' ? await memstick(gm, api) : await sram(ejs, api);
   setInterval(flush, 30000);
   addEventListener('visibilitychange', () => document.hidden && flush());
   leaving = () => Promise.race([flush(), new Promise((r) => setTimeout(r, 2000))]);
@@ -158,6 +141,115 @@ async function saves(game, ejs, state) {
   if (saved) adapter.applyControls(saved);
   // The layout chosen in Opzioni; ?menu=bar|vetrina overrides it (handy to compare the two).
   menu = ingame(adapter, saved, { variant: params.get('menu') ?? getMenuStyle() });
+}
+
+const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+// keepalive lets a small save finish even if the page is closing (browsers cap it at 64 KB).
+const putSave = (api, data) => fetch(`${api}/save`, { method: 'PUT', body: data, keepalive: data.length < 60000 }).catch(() => {});
+function mkdirs(FS, path) {
+  let dir = '';
+  for (const part of path.split('/').slice(1, -1)) if (!FS.analyzePath((dir += '/' + part)).exists) FS.mkdir(dir);
+}
+
+// In-game save (SRAM): the server copy replaces whatever this browser had. None on the server yet: keep the
+// browser's (saves made before this existed) and upload it at the first flush. Returns the flush.
+async function sram(ejs, api) {
+  const gm = ejs.gameManager;
+  const sav = await fetch(`${api}/save`);
+  if (sav.ok) {
+    const path = gm.getSaveFilePath();
+    mkdirs(gm.FS, path);
+    gm.FS.writeFile(path, new Uint8Array(await sav.arrayBuffer()));
+    gm.loadSaveFiles();
+  }
+  // EmulatorJS emits saveSaveFiles with the file whenever it flushes the core's SRAM (its own timer, or ours).
+  let last;
+  let upload = Promise.resolve();
+  ejs.on('saveSaveFiles', (data) => {
+    if (!data?.length || (last && same(last, data))) return;
+    // A game never saved has blank SRAM (all 0xFF or 0x00): never let it replace a real save on the server.
+    if (data.every((b) => b === data[0]) && (data[0] === 0xff || data[0] === 0)) return;
+    last = data.slice();
+    upload = putSave(api, last);
+  });
+  return () => { try { gm.saveSaveFiles(); } catch {} return upload; };
+}
+
+// PSP: PPSSPP has no SRAM. Its saves are folders on the emulated memory stick (PSP/SAVEDATA/{game code}...), beside
+// EmulatorJS's save file, and go to the server as one tar per game. The memory stick starts each game with only that
+// game's folders, so whatever is there at a flush is this game's. Server unreachable: no sync at all, rather than
+// emptying the memory stick and then overwriting the server's save with this session's.
+async function memstick(gm, api) {
+  const { FS } = gm;
+  const root = gm.getSaveFilePath().replace(/[^/]*$/, 'PSP/SAVEDATA');
+  const sav = await fetch(`${api}/save`).catch(() => null);
+  if (!sav || (!sav.ok && sav.status !== 404)) {
+    toast('Server non raggiungibile: i salvataggi restano in questo browser.');
+    return () => Promise.resolve();
+  }
+  const rm = (p) => {
+    if (!FS.isDir(FS.stat(p).mode)) return FS.unlink(p);
+    for (const n of FS.readdir(p)) if (n !== '.' && n !== '..') rm(`${p}/${n}`);
+    FS.rmdir(p);
+  };
+  if (FS.analyzePath(root).exists) rm(root);
+  let last = sav.ok ? new Uint8Array(await sav.arrayBuffer()) : tar([]);
+  for (const [name, data] of untar(last)) {
+    mkdirs(FS, `${root}/${name}`);
+    FS.writeFile(`${root}/${name}`, data);
+  }
+  const files = (dir, rel = '') => !FS.analyzePath(dir).exists ? [] : FS.readdir(dir).sort().flatMap((n) => {
+    if (n === '.' || n === '..') return [];
+    const p = `${dir}/${n}`;
+    return FS.isDir(FS.stat(p).mode) ? files(p, `${rel}${n}/`) : [[rel + n, FS.readFile(p)]];
+  });
+  let upload = Promise.resolve();
+  // PPSSPP writes the memory stick straight into EmulatorJS's file system: nothing to ask the core first.
+  return () => {
+    const data = tar(files(root));
+    if (data.length > 1024 && !same(data, last)) upload = putSave(api, (last = data)); // 1024 = no files: never upload
+    return upload;
+  };
+}
+
+// The few tar bits the PSP saves need: ustar, regular files, deterministic (same files, same bytes). Python's tarfile
+// and any archiver open it.
+function tar(files) {
+  const enc = new TextEncoder();
+  const blocks = [];
+  for (const [name, data] of files) {
+    const h = new Uint8Array(512);
+    const put = (s, at) => h.set(enc.encode(s), at);
+    put(name, 0);
+    put('0000644\0', 100);
+    put('0000000\0', 108);
+    put('0000000\0', 116);
+    put(data.length.toString(8).padStart(11, '0') + '\0', 124);
+    put('00000000000\0', 136);
+    put('        ', 148); // the checksum field counts as spaces while it is summed
+    put('0', 156);
+    put('ustar\x0000', 257);
+    put(h.reduce((a, b) => a + b, 0).toString(8).padStart(6, '0') + '\0 ', 148);
+    const body = new Uint8Array(Math.ceil(data.length / 512) * 512);
+    body.set(data);
+    blocks.push(h, body);
+  }
+  blocks.push(new Uint8Array(1024));
+  const out = new Uint8Array(blocks.reduce((n, b) => n + b.length, 0));
+  blocks.reduce((at, b) => (out.set(b, at), at + b.length), 0);
+  return out;
+}
+function untar(bytes) {
+  const dec = new TextDecoder();
+  const files = [];
+  for (let at = 0; at + 512 <= bytes.length && bytes[at];) {
+    const field = (from, len) => dec.decode(bytes.subarray(at + from, at + from + len)).replace(/\0.*$/s, '');
+    const size = parseInt(field(124, 12).trim(), 8) || 0;
+    const name = field(0, 100);
+    if ((field(156, 1) || '0') === '0' && !name.split('/').includes('..')) files.push([name, bytes.slice(at + 512, at + 512 + size)]);
+    at += 512 + Math.ceil(size / 512) * 512;
+  }
+  return files;
 }
 
 // The current frame as a PNG at the core's own resolution (240x160 on GBA), straight from the core: the WebGL

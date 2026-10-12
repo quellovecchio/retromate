@@ -49,6 +49,20 @@ emulator:
             # the game from the in-game menu's options).
             dolphin_language: "5"
           # everything not listed keeps the core's default (Hardware renderer, native 640x528, JIT64)
+        # GameCube: the same Dolphin core, its own entry for port 1's device. A GameCube game takes only the GameCube
+        # pad (RETRO_DEVICE_JOYPAD): the Wii's 1281 would plug one in too, but with the Classic Controller's labels.
+        # Same User folder as the Wii, so its memory cards are in library/saves/cloud-game/User/GC. dolphin_language
+        # sets the GameCube language too (PAL games only have one).
+        ngc:
+          lib: dolphin_libretro
+          folder: ngc
+          roms: ["iso", "rvz", "gcz", "ciso"]
+          isGlAllowed: true
+          vfr: true
+          hid:
+            0: [1]
+          options:
+            dolphin_language: "5"
         # RPCS3 (PS3). Vulkan, its main and fastest renderer, through the patch's Vulkan frontend ("vulkan" hack): RPCS3
         # renders on our device and hands each frame over as an image, which the frontend converts to XRGB8888. Its own
         # fallback (refused a frontend context, it opens the driver itself and copies frames back in memory) showed the

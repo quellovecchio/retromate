@@ -384,8 +384,8 @@ function options() {
       ${toggle('lowlat', "Ottimizzazione giochi d'azione")}
     </div>
     <div class="panel">
-      <h2>Wii</h2>
-      <p class="panel-note">Lingua del sistema Wii: i giochi la usano per menu e testi. Vale per questo dispositivo.</p>
+      <h2>Wii e GameCube</h2>
+      <p class="panel-note">Lingua del sistema Wii: i giochi la usano per menu e testi (sul GameCube solo quelli europei). Vale per questo dispositivo.</p>
       <div class="choices" data-choices="lang" role="group" aria-label="Lingua del sistema Wii">${WII_LANGUAGES.map(([id, name]) => `
         <button class="choice" data-lang="${id}" aria-pressed="false">${name}</button>`).join('')}
       </div>

@@ -176,8 +176,9 @@ export function stream(game, container, status, attempt = 0, ctl = { controls: s
         if (pc.connectionState === 'connected' && !started) { // can fire again after a reconnect
           started = true;
           status('Avvio del gioco…');
-          // The Wii language from Opzioni, then what was chosen for this game in the in-game menu.
-          ctl.baseOptions = game.platform === 'wii' ? { dolphin_language: getWiiLanguage() } : {};
+          // The Wii language from Opzioni (GameCube games take it too), then what was chosen for this game in the
+          // in-game menu.
+          ctl.baseOptions = game.platform === 'wii' || game.platform === 'ngc' ? { dolphin_language: getWiiLanguage() } : {};
           const options = { ...ctl.baseOptions, ...ctl.startOptions };
           send(T.START, { game_name: gameName, room_id: '', player_index: 0, options });
         } else if (pc.connectionState === 'failed') status('Connessione WebRTC fallita (porta UDP 8443?).');

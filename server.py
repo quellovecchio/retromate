@@ -44,7 +44,13 @@ PLATFORMS = {
     # ponytail: a cue+bin folder plays its first .bin: fine for single-track games, no CD audio on multi-track ones
     # and disc 1 only on multi-disc ones; serve the folder as a zip if that matters.
     "psx": dict(name="PlayStation", thumbs="Sony - PlayStation", runner="browser", core="psx", exts=".chd .pbp .bin"),
+    "nds": dict(name="Nintendo DS", thumbs="Nintendo - Nintendo DS", runner="browser", core="nds", exts=".nds"),
+    # PPSSPP runs threads in EmulatorJS: the play page must be cross-origin isolated (isolate()).
+    "psp": dict(name="PlayStation Portable", thumbs="Sony - PlayStation Portable", runner="browser", core="psp", threads=True,
+                exts=".iso .cso .pbp"),
     "ps2": dict(name="PlayStation 2", thumbs="Sony - PlayStation 2", runner="stream", core="pcsx2", local="play", exts=".iso .chd .cso .zso .ciso .m3u"),
+    # GameCube: the Wii's Dolphin core, its own entry in stream/config.yaml (GameCube pad on port 1)
+    "ngc": dict(name="GameCube", thumbs="Nintendo - GameCube", runner="stream", core="dolphin", exts=".iso .rvz .gcz .ciso"),
     "wii": dict(name="Wii", thumbs="Nintendo - Wii", runner="stream", core="dolphin", exts=".iso .wbfs .rvz .gcz .ciso .wia"),
     # RPCS3 takes folder dumps too, but they are all named PS3_DISC.SFB and cloud-game tells games apart by file name
     "ps3": dict(name="PlayStation 3", thumbs="Sony - PlayStation 3", runner="stream", core="rpcs3", exts=".iso"),
@@ -153,6 +159,7 @@ def scan():
 def out(g):
     p = PLATFORMS[g["platform"]]
     return {**g, "platform_name": p["name"], "runner": p["runner"], "core": p["core"], "local": p.get("local"),
+            "threads": p.get("threads"),
             "cover": cover_url(p["thumbs"], g["cover"] or game_name(g["file"]))}
 
 
@@ -182,13 +189,13 @@ async def lifespan(_):
 app = FastAPI(title="RetroMate", lifespan=lifespan)
 
 
-# Play! (play.html?local) runs threads, which need SharedArrayBuffer, which needs a cross-origin isolated page and
+# Play! (play.html?local) and PPSSPP (play.html?threads, play.js adds it) run threads, which need SharedArrayBuffer, which needs a cross-origin isolated page and
 # workers. Only there: EmulatorJS changes behaviour on isolated pages. credentialless still lets cross-origin covers in.
 # Same rule in web/vite.config.js for development.
 @app.middleware("http")
 async def isolate(request, call_next):
     response = await call_next(request)
-    if "local" in request.query_params or request.url.path.startswith("/play/"):
+    if "local" in request.query_params or "threads" in request.query_params or request.url.path.startswith("/play/"):
         response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
         response.headers["Cross-Origin-Embedder-Policy"] = "credentialless"
     return response
@@ -241,7 +248,8 @@ def add_playtime(game_id: int, seconds: float):
 
 
 def save_path(g):
-    return SAVES / g["platform"] / f"{game_name(g['file'])}.srm"
+    # PSP: a tar of the game's memory stick save folders (play.js), the others the core's SRAM
+    return SAVES / g["platform"] / f"{game_name(g['file'])}{'.tar' if g['platform'] == 'psp' else '.srm'}"
 
 
 def states_dir(g):
