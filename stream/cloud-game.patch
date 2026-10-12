@@ -551,7 +551,7 @@ index 669862d..34d3e31 100644
  
          case RETRO_DEVICE_ANALOG:
 diff --git a/pkg/worker/caged/libretro/nanoarch/nanoarch.go b/pkg/worker/caged/libretro/nanoarch/nanoarch.go
-index a451aeb..359e68e 100644
+index a451aeb..0b3e746 100644
 --- a/pkg/worker/caged/libretro/nanoarch/nanoarch.go
 +++ b/pkg/worker/caged/libretro/nanoarch/nanoarch.go
 @@ -7,6 +7,7 @@ import (
@@ -579,7 +579,17 @@ index a451aeb..359e68e 100644
  	Stopped       atomic.Bool
  	sys           struct {
  		av  C.struct_retro_system_av_info
-@@ -228,6 +235,9 @@ func (n *Nanoarch) CoreLoad(meta Metadata) {
+@@ -211,6 +218,9 @@ func (n *Nanoarch) CoreLoad(meta Metadata) {
+ 	n.Aspect = meta.CoreAspectRatio
+ 	n.Video.gl.autoCtx = meta.AutoGlContext
+ 	n.Video.gl.enabled = meta.IsGlAllowed
++	// RetroMate: no pixel format until the core sets one (LoadGame picks a default for cores that never do), rather
++	// than the previous game's.
++	n.Video.PixFmt = PixFmt{}
+ 
+ 	Nan0.audioBuffCb = nil
+ 
+@@ -228,6 +238,9 @@ func (n *Nanoarch) CoreLoad(meta Metadata) {
  
  	n.options = maps.Clone(meta.Options)
  	n.options4rom = meta.Options4rom
@@ -589,7 +599,7 @@ index a451aeb..359e68e 100644
  
  	corePath := meta.LibPath + meta.LibExt
  	coreLib, err = open(corePath)
-@@ -316,6 +326,18 @@ func (n *Nanoarch) LoadGame(path string) error {
+@@ -316,6 +329,18 @@ func (n *Nanoarch) LoadGame(path string) error {
  		}
  	}
  
@@ -608,7 +618,24 @@ index a451aeb..359e68e 100644
  	if ok := C.bridge_retro_load_game(retroLoadGame, &game); !ok {
  		return fmt.Errorf("core failed to load ROM: %v", path)
  	}
-@@ -332,8 +354,9 @@ func (n *Nanoarch) LoadGame(path string) error {
+@@ -327,13 +352,26 @@ func (n *Nanoarch) LoadGame(path string) error {
+ 		av.geometry.max_width, av.geometry.max_height,
+ 		av.timing.fps, av.geometry.aspect_ratio, av.timing.sample_rate,
+ 	)
++	// RetroMate: a core that never calls SET_PIXEL_FORMAT (RPCS3) left 0 bytes per pixel, and sizing the GL read
++	// buffer panicked. libretro's default is 0RGB1555; a hardware-rendered frame is read back from our own FBO, so
++	// XRGB8888 there, as RetroArch reads it.
++	if n.Video.PixFmt.BPP == 0 {
++		f := uint32(C.RETRO_PIXEL_FORMAT_0RGB1555)
++		if n.Video.gl.enabled {
++			f = uint32(C.RETRO_PIXEL_FORMAT_XRGB8888)
++		}
++		if _, err := videoSetPixelFormat(f); err != nil {
++			return err
++		}
++	}
+ 	if isGeometryDifferent(av.geometry) {
+ 		geometryChange(av.geometry)
  	}
  	n.sys.av = av
  
@@ -620,7 +647,7 @@ index a451aeb..359e68e 100644
  
  	Nan0.tickTime = time.Duration(float64(time.Second) / float64(n.sys.av.timing.fps))
  	if n.vfr {
-@@ -350,6 +373,7 @@ func (n *Nanoarch) LoadGame(path string) error {
+@@ -350,6 +388,7 @@ func (n *Nanoarch) LoadGame(path string) error {
  			runtime.LockOSThread()
  			initVideo()
  			C.bridge_context_reset(Nan0.Video.hw.context_reset)
@@ -628,7 +655,7 @@ index a451aeb..359e68e 100644
  			runtime.UnlockOSThread()
  		}
  	}
-@@ -365,6 +389,15 @@ func (n *Nanoarch) LoadGame(path string) error {
+@@ -365,6 +404,15 @@ func (n *Nanoarch) LoadGame(path string) error {
  		for _, device := range v {
  			C.bridge_retro_set_controller_port_device(retroSetControllerPortDevice, C.uint(k), C.unsigned(device))
  			n.log.Debug().Msgf("set custom port-device: %v:%v", k, device)
@@ -644,7 +671,7 @@ index a451aeb..359e68e 100644
  		}
  	}
  
-@@ -373,6 +406,18 @@ func (n *Nanoarch) LoadGame(path string) error {
+@@ -373,6 +421,18 @@ func (n *Nanoarch) LoadGame(path string) error {
  	return nil
  }
  
@@ -663,7 +690,7 @@ index a451aeb..359e68e 100644
  func (n *Nanoarch) Shutdown() {
  	Nan0.audioBuffCb = nil
  	if n.LibCo {
-@@ -392,6 +437,14 @@ func (n *Nanoarch) Shutdown() {
+@@ -392,6 +452,14 @@ func (n *Nanoarch) Shutdown() {
  				if err := n.glCtx.BindContext(); err != nil {
  					n.log.Error().Err(err).Msg("ctx switch fail")
  				}
@@ -678,7 +705,7 @@ index a451aeb..359e68e 100644
  			})
  		}
  		C.bridge_call(retroUnloadGame)
-@@ -411,6 +464,7 @@ func (n *Nanoarch) Shutdown() {
+@@ -411,6 +479,7 @@ func (n *Nanoarch) Shutdown() {
  	}
  	n.options = nil
  	n.options4rom = nil
@@ -686,7 +713,7 @@ index a451aeb..359e68e 100644
  	Nan0.audioBuffCb = nil
  	n.freeCStrings()
  }
-@@ -830,6 +884,32 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
+@@ -830,6 +899,32 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
  			return true
  		}
  		return false
@@ -719,7 +746,7 @@ index a451aeb..359e68e 100644
  	case C.RETRO_ENVIRONMENT_GET_VARIABLE:
  		if Nan0.options == nil {
  			return false
-@@ -858,28 +938,13 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
+@@ -858,28 +953,13 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
  		}
  		return false
  	case C.RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:

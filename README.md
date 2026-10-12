@@ -59,6 +59,7 @@ docker compose up -d
   - Games can be paused (`PauseGame`, message type 114): the frame loop idles without running the core, so the in-game menu freezes a streamed game like a local one.
   - The worker loaded games inside its WebSocket read loop, so it stopped answering the coordinator's pings: a game that takes a couple of seconds to load (Wii) timed out the link and the start was cancelled ("Il server non ha avviato il gioco").
   - On close the worker called the core's `context_destroy` after `retro_deinit`, when the core is already gone: LRPS2 spun forever and Dolphin hung the worker (the next game found the slot busy). Skipping it was worse with the NVIDIA driver: Dolphin's shader threads kept their shared GL contexts and the GPU fell off the bus (Xid 79). It is now called first, as libretro and RetroArch do.
+  - A core that never declares its pixel format (RPCS3) left the worker with 0 bytes per pixel, and it panicked sizing the OpenGL read buffer. It now gets libretro's default, or XRGB8888 for OpenGL cores (read back from cloud-game's own framebuffer, as RetroArch does).
   - Coordinator-to-worker calls, the game start included, gave up after 10 s. Now 2 minutes: RPCS3's first start installs the PS3 firmware.
 
   After changing the patch, run `docker compose build`.
