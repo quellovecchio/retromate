@@ -85,12 +85,14 @@ encoder:
         error-resilient=default+partitions overshoot=20 undershoot=50
     # NVENC on the NVIDIA host (docker-compose.nvidia.yml picks it with CLOUD_GAME_ENCODER_VIDEO_CODEC=h264): the GPU
     # encodes, the CPU stays with the emulator. cloud-game writes no element for h264 (its x264 case is commented
-    # out), so params start with the element itself. Same 20 Mbit/s as VP8; ultra-low-latency, no B-frames, no
-    # periodic keyframes (gop-size=-1: cloud-game forces one every keyframeInterval frames, SPS/PPS included);
+    # out), so params start with the element itself. cloud-game's capsfilter before it says I420, which nvh264enc
+    # doesn't take (NV12, Y444, VUYA, RGB only): videoconvert interleaves the chroma planes into NV12. Same 20 Mbit/s
+    # as VP8; ultra-low-latency, no B-frames, no periodic keyframes (gop-size=-1: cloud-game forces one every keyframeInterval frames, SPS/PPS included);
     # vbv-buffer-size ~3 frames at 60 fps, so those keyframes aren't starved into blocks. Constrained baseline:
     # every WebRTC H.264 decoder takes it (the AUDs, which the RTP packetizer drops anyway, are off).
     h264:
       params: >-
+        videoconvert n-threads=2 ! video/x-raw,format=NV12 !
         nvh264enc name=video_enc preset=p4 tune=ultra-low-latency rc-mode=cbr bitrate=20000 vbv-buffer-size=1000
         gop-size=-1 zerolatency=true repeat-sequence-header=true aud=false
       caps: video/x-h264,stream-format=byte-stream,alignment=au,profile=constrained-baseline
