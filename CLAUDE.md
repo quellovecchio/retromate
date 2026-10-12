@@ -127,10 +127,12 @@ the old process alive: restart the `api` server after editing `server.py`.
   The Wii system language is chosen in Opzioni (per device, Italian by default) and sent by `stream.js` in the start
   request as `options.dolphin_language` (a value saved for the game from the in-game menu wins); `stream/config.yaml`
   holds the default. Dolphin writes it to the NAND's SYSCONF (`IPL.LNG`).
-- PS3 runs on RPCS3 (`rpcs3_libretro`) with `rpcs3_renderer: vulkan` but without the `vulkan` hack: refused a
-  frontend Vulkan context, RPCS3 opens the Vulkan driver itself and hands frames over in memory (its own path,
-  "Vulkan without a hardware context"). `opengl` makes it draw into our GLX context through a shared context it
-  creates for its RSX thread. Firmware
+- PS3 runs on RPCS3 (`rpcs3_libretro`) with `rpcs3_renderer: vulkan` and the `vulkan` hack: it renders on the
+  frontend's device and hands frames over with `set_image`. Its own fallback without a frontend context ("Vulkan
+  without a hardware context", copied back through memory) froze on the loading screen with the game's audio playing:
+  it drops frames that aren't BGRA (`software present got a non-BGRA frame`; RPCS3's own log, `*.log` in
+  `library/saves/ps3/rpcs3`). `opengl` makes it draw into our GLX context through a shared context it creates for its
+  RSX thread. An image format `vk_readback` doesn't convert is logged once as `vulkan: frame format N`. Firmware
   `library/bios/ps3/PS3UPDAT.PUP`, installed on the first start; its system folder (dev_flash, dev_hdd0 with the game
   saves, caches) is `library/saves/ps3/rpcs3`. `.iso` only: folder dumps are all named `PS3_DISC.SFB`, and cloud-game
   tells games apart by file stem. No save states (RPCS3 can't serialize). It links libOpenGL, libvulkan and libasound,
@@ -156,7 +158,8 @@ the old process alive: restart the `api` server after editing `server.py`.
   `stream/config.yaml` and only where `vk_available()` finds a GPU: `GET_PREFERRED_HW_RENDER` then answers Vulkan
   (OpenGL core otherwise, e.g. WSL2, which has no Vulkan driver in the container), and any other Vulkan
   `SET_HW_RENDER` is refused (accepted, it used to fall into the GL path and crash with BadMatch). PS2 has the hack,
-  renderer left on `Auto`. A core that ends up with no hardware context runs as a software core (`gl.enabled` off).
+  with `pcsx2_renderer: Auto` stated in the config (cloud-game passes only listed options: unset, LRPS2 got an empty
+  value and fell back to OpenGL); PS3 too. Cores retract their image with `set_image(NULL)` before destroying it. A core that ends up with no hardware context runs as a software core (`gl.enabled` off).
   Vulkan frames are top down: no `flip`.
 - `stream/config.yaml` overrides cloud-game's defaults. At start cloud-game passes only the core options listed
   there plus the start request's (no core defaults), which is why `pcsx2_bios` must name a file in `library/bios/ps2`.

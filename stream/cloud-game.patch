@@ -1621,10 +1621,10 @@ index 0000000..03cdaaf
 +#endif
 diff --git a/pkg/worker/caged/libretro/nanoarch/vulkan.c b/pkg/worker/caged/libretro/nanoarch/vulkan.c
 new file mode 100644
-index 0000000..fe31aa9
+index 0000000..adcfee8
 --- /dev/null
 +++ b/pkg/worker/caged/libretro/nanoarch/vulkan.c
-@@ -0,0 +1,420 @@
+@@ -0,0 +1,440 @@
 +// RetroMate: the frontend side of libretro's Vulkan rendering, which cloud-game lacked (it only hosted OpenGL).
 +// Headless: no surface, no swapchain. The core renders on our device (created through its context negotiation
 +// interface when it has one, so it gets the extensions and features it needs) and hands each frame over with
@@ -1632,6 +1632,7 @@ index 0000000..fe31aa9
 +// One frame in flight: the copy is waited for before video_refresh returns, so sync index 0 is always free again.
 +
 +#include <pthread.h>
++#include <stdio.h>
 +#include <stdint.h>
 +#include <stdlib.h>
 +#include <string.h>
@@ -2027,8 +2028,27 @@ index 0000000..fe31aa9
 +            p[i + 3] = 0xff;
 +        }
 +        break;
-+    default:
++    case VK_FORMAT_A2R10G10B10_UNORM_PACK32:
++        for (VkDeviceSize i = 0; i < size; i += 4) {
++            uint32_t v;
++            memcpy(&v, p + i, 4);
++            p[i] = (v >> 2) & 0xff;      // B: bits 0-9
++            p[i + 1] = (v >> 12) & 0xff; // G: bits 10-19
++            p[i + 2] = (v >> 22) & 0xff; // R: bits 20-29
++            p[i + 3] = 0xff;
++        }
 +        break;
++    case VK_FORMAT_B8G8R8A8_UNORM:
++    case VK_FORMAT_B8G8R8A8_SRGB:
++        break;
++    default: { // copied as is: say so once, the colours will be wrong
++        static VkFormat warned;
++        if (warned != vk.image.create_info.format) {
++            warned = vk.image.create_info.format;
++            fprintf(stderr, "vulkan: frame format %d is not converted to XRGB8888\n", (int)warned);
++        }
++        break;
++    }
 +    }
 +    return vk.map;
 +}
