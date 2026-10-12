@@ -120,7 +120,7 @@ the old process alive: restart the `api` server after editing `server.py`.
   answers `{categories, options: [{key, label, category, values, default, value, hidden}]}`, SetOption 116
   `{key, value}` answers ok/err and reaches the core through `GET_VARIABLE_UPDATE`; `nanoarch/options.go`), PauseGame (type 114, `{room_id, paused}`) so the in-game menu freezes a streamed game, port 1's emulated device:
   GetOptions also answers `devices` (from `SET_CONTROLLER_INFO`) and `device`, and the pseudo-option `retromate_device`
-  plugs one in at start or mid-game). `stream()` returns a
+  plugs one in at start or mid-game, the raw formats an encoder takes: `formats` in its config entry). `stream()` returns a
   controller (pause, reset 113, save 106 / load 107 with their replies, input mapping) that `streamAdapter` wraps.
   SaveGame/LoadGame take a `name` (digits): the worker writes `library/states/{platform}/{game}/{name}.state`
   (mounted on `/usr/local/share/cloud-game/states`), the page uploads the screenshot from the `<video>` frame. Without
@@ -177,7 +177,8 @@ the old process alive: restart the `api` server after editing `server.py`.
   same bitrate): `docker-compose.nvidia.yml` sets `CLOUD_GAME_ENCODER_VIDEO_CODEC=h264`, and `stream/Dockerfile`
   rebuilds the image's GStreamer (same version and options) with the `nvcodec` plugin, which the official image lacks.
   Software VP8 took whole CPU cores from RPCS3. cloud-game writes no encoder element for h264, so the config's `params`
-  start with it. `ps2` uses
+  start with it. Its `formats` (an encoder entry field the patch adds; I420 without it) lets the core's RGB frames
+  through untouched: nvh264enc converts them to YUV on the GPU, no CPU conversion at all. `ps2` uses
   `skip_hw_context_destroy`, otherwise the worker hangs when a game closes.
 - One worker = one game at a time. After testing a streamed game in the browser pane, navigate away from
   `play.html` and confirm the slot is free, or the user's own launch is refused.

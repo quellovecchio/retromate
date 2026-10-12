@@ -113,6 +113,18 @@ index 35be93a..bc14bca 100644
  
  var errCanceled = errors.New("canceled")
  var errTimeout = errors.New("timeout")
+diff --git a/pkg/config/worker.go b/pkg/config/worker.go
+index be5ac42..38dd9ba 100644
+--- a/pkg/config/worker.go
++++ b/pkg/config/worker.go
+@@ -84,6 +84,7 @@ type CodecSettings struct {
+ 	Encoder string
+ 	Params  string
+ 	Caps    string
++	Formats string // RetroMate: raw formats the encoder takes, e.g. "{ BGRx, RGBA }" (I420 when empty)
+ }
+ 
+ // allows custom config path
 diff --git a/pkg/coordinator/user.go b/pkg/coordinator/user.go
 index d11b144..f226a6f 100644
 --- a/pkg/coordinator/user.go
@@ -2237,7 +2249,7 @@ index 6972cc7..fe9504b 100644
  		return api.ErrPacket
  	}
 diff --git a/pkg/worker/media/gstreamer.go b/pkg/worker/media/gstreamer.go
-index c5fe8ec..3cf2e77 100644
+index c5fe8ec..f5ea553 100644
 --- a/pkg/worker/media/gstreamer.go
 +++ b/pkg/worker/media/gstreamer.go
 @@ -46,6 +46,17 @@ static inline void pushVideoBuf(GstAppSrc *src, void *data, gsize len,
@@ -2284,3 +2296,23 @@ index c5fe8ec..3cf2e77 100644
  		C.pushVideoBuf(v.src(),
  			unsafe.Pointer(&job.data[0]), C.gsize(len(job.data)),
  			C.GstVideoFormat(vidFmt), C.guint(job.w), C.guint(job.h), C.gint(job.stride))
+@@ -456,9 +475,16 @@ func buildVideoPipeline(w, h, scaledW, scaledH int, pixFmt uint32, scaleMethod s
+ 	}
+ 	build.writef("! videoconvertscale name=video_scale chroma-resampler=cubic method=%s n-threads=2 ", cmp.Or(scaleMethod, "nearest-neighbour"))
+ 	build.write("! queue name=video_q max-size-buffers=1 ")
+-	build.writef("! capsfilter name=video_caps caps=\"video/x-raw,format=I420,color-range=0_255,width=%d,height=%d ", scaledW, scaledH)
+-	if conf.Video.Colorimetry != "" {
+-		build.writef(",colorimetry=%s", conf.Video.Colorimetry)
++	// RetroMate: an encoder that takes the core's RGB frames itself (formats in the config: NVENC converts on the GPU)
++	// gets them as they are; videoconvertscale then passes them through untouched instead of converting to I420 on the
++	// CPU. Colorimetry and range describe YUV, so they go with I420 only.
++	if opts.Formats != "" {
++		build.writef("! capsfilter name=video_caps caps=\"video/x-raw,format=%s,width=%d,height=%d", opts.Formats, scaledW, scaledH)
++	} else {
++		build.writef("! capsfilter name=video_caps caps=\"video/x-raw,format=I420,color-range=0_255,width=%d,height=%d ", scaledW, scaledH)
++		if conf.Video.Colorimetry != "" {
++			build.writef(",colorimetry=%s", conf.Video.Colorimetry)
++		}
+ 	}
+ 	build.write("\" ")
+ 	build.write("! ")

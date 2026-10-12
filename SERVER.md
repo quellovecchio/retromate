@@ -179,6 +179,34 @@ sudo systemctl enable --now nvidia-persistenced
 
 No suspend or hibernation; the driver stays initialized, so games start faster.
 
+GPU power cap: Ampere cards draw short spikes well above their rated power, and a power supply that can't follow
+drops the card off the bus mid-game (`dmesg` shows `Xid 79`: "GPU has fallen off the bus"). A lower power limit and a
+clock cap (the RTX 3070 defaults to 220 W) remove most of the spikes for a few percent of speed. `nvidia-smi` forgets
+both at reboot, hence the service:
+
+```
+nvidia-smi -q -d POWER | grep -i limit
+sudo tee /etc/systemd/system/nvidia-power.service <<'EOF'
+[Unit]
+Description=GPU power limit and clock cap
+After=nvidia-persistenced.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/nvidia-smi -pl 170
+ExecStart=/usr/bin/nvidia-smi -lgc 210,1700
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable --now nvidia-power
+nvidia-smi -q -d POWER,CLOCK | grep -i -E 'current power limit|applications clocks|locked'
+```
+
+The first line shows the card's allowed range: `-pl` must sit between its Min and Max Power Limit. Undo with
+`sudo systemctl disable --now nvidia-power && sudo nvidia-smi -rgc && sudo nvidia-smi -pl 220`.
+
 ## 11. Library and firewall
 
 - **Library:** `/data/retromate/library` (section 14), on the `data` volume, copied from Windows over Samba
