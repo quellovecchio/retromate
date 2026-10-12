@@ -36,6 +36,18 @@ export function setWiiLanguage(id) {
   try { localStorage.setItem(LANG_KEY, id); } catch {}
 }
 
+// "Ottimizzazione giochi d'azione", chosen in Opzioni (per device, off by default). The browser holds frames back to
+// show them evenly: with RPCS3's uneven frame rate Chrome's jitter buffer measured ~80 ms, peaks of 150, all of it
+// input lag. On, it keeps that buffer as short as it can (jitterBufferTarget 0): quicker response, visible hitches
+// when the game or the network stutters.
+const LOW_LATENCY_KEY = 'retromate-low-latency';
+export function getLowLatency() {
+  try { return localStorage.getItem(LOW_LATENCY_KEY) === '1'; } catch { return false; }
+}
+export function setLowLatency(on) {
+  try { localStorage.setItem(LOW_LATENCY_KEY, on ? '1' : '0'); } catch {}
+}
+
 // The controllers Dolphin emulates on a Wii (the core lists them, stream/cloud-game.patch), by its device id: an Italian
 // name and what each RetroPad input (EmulatorJS numbers, see below) becomes, from DolphinLibretro/Input.cpp
 // (retro_set_controller_port_device_wii) with its default IR mode, the right stick aiming the pointer. sticks: what
@@ -153,7 +165,11 @@ export function stream(game, container, status, attempt = 0, ctl = { controls: s
       ctl.data = data;
       pc.addTransceiver('video', { direction: 'recvonly' });
       pc.addTransceiver('audio', { direction: 'recvonly' });
-      pc.ontrack = (e) => media.addTrack(e.track);
+      pc.ontrack = (e) => {
+        // video and audio alike, so they stay in sync; browsers without it ignore the property
+        if (getLowLatency()) e.receiver.jitterBufferTarget = 0;
+        media.addTrack(e.track);
+      };
       pc.onicecandidate = (e) => e.candidate && send(T.SIGNAL, { ice: JSON.stringify(e.candidate) });
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'connected' && !started) { // can fire again after a reconnect

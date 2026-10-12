@@ -6,7 +6,7 @@ import { FONTS, getFonts, setFonts } from './fonts.js';
 import './style.css';
 import { getSwap, setSwap } from './nav.js';
 import './padtype.js';
-import { WII_LANGUAGES, getWiiLanguage, setWiiLanguage, slotFree } from './stream.js';
+import { WII_LANGUAGES, getLowLatency, getWiiLanguage, setLowLatency, setWiiLanguage, slotFree } from './stream.js';
 
 const root = document.documentElement;
 const scene = document.querySelector('.scene');
@@ -376,6 +376,14 @@ function options() {
       <p class="panel-note" data-menu-note></p>
     </div>
     <div class="panel">
+      <h2>Streaming</h2>
+      <p class="panel-note">Per i giochi che girano sul server. Il browser trattiene alcuni fotogrammi per mostrare il video
+        fluido, al prezzo di 50–150 ms di ritardo sui comandi. Con l'ottimizzazione li mostra appena arrivano: i comandi
+        rispondono prima, ma quando il gioco o la rete rallentano si vedono piccoli scatti. Vale per questo dispositivo,
+        dalla prossima partita.</p>
+      ${toggle('lowlat', "Ottimizzazione giochi d'azione")}
+    </div>
+    <div class="panel">
       <h2>Wii</h2>
       <p class="panel-note">Lingua del sistema Wii: i giochi la usano per menu e testi. Vale per questo dispositivo.</p>
       <div class="choices" data-choices="lang" role="group" aria-label="Lingua del sistema Wii">${WII_LANGUAGES.map(([id, name]) => `
@@ -389,6 +397,8 @@ function options() {
       swap: [getSwap, setSwap, (on) => (on ? 'B seleziona, A torna indietro' : 'A seleziona, B torna indietro')],
       back: [() => backHome, setBackHome, (on) => (on ? 'Da Libreria e Opzioni, B torna alla Home'
         : 'B torna indietro solo dalle pagine delle console')],
+      lowlat: [getLowLatency, setLowLatency, (on) => (on ? 'Comandi più pronti, video meno regolare'
+        : 'Video più regolare, comandi in ritardo')],
     };
     for (const t of scene.querySelectorAll('.toggle')) {
       const [get, set, note] = SWITCHES[t.dataset.opt];

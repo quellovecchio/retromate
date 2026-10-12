@@ -40,13 +40,17 @@ const least = (list, f) => list.reduce((m, c) => (m && f(m) <= f(c) ? m : c), un
 // Lines first: left/right stay on the current line (targets overlapping it vertically), up/down go to the nearest line
 // (targets overlapping the closest one) and then to the closest target on it. A [data-row] is one line however it is
 // laid out (the cover flow, the tabs): left/right stay inside it, up/down leave it and land on the row's current item
-// ([data-current] box, [aria-current] tab) rather than the nearest one.
+// ([data-current] box, [aria-current] tab) rather than the nearest one. A [data-col] is the other way round (the
+// in-game options: categories beside their options, lines that don't align): up/down stay inside it, and stop at its
+// end rather than wander into the other column; left/right leave it even with nothing level on the other side, and
+// land on the other column's current item.
 export function move(key) {
   const [dx, dy] = DIRS[key];
   const cur = document.activeElement;
   const items = focusables();
   if (!items.includes(cur)) return items[0]?.focus();
   const row = cur.closest('[data-row]');
+  const col = cur.closest('[data-col]');
   const r = cur.getBoundingClientRect();
   const a = center(r);
   const behavior = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
@@ -55,12 +59,19 @@ export function move(key) {
     const e = el.getBoundingClientRect();
     const b = center(e);
     return { el, e, along: (b.x - a.x) * dx + (b.y - a.y) * dy, side: Math.abs((b.x - a.x) * dy + (b.y - a.y) * dx) };
-  }).filter((c) => c.along > 1 && (dy || overlap(c.e, r)));
+  }).filter((c) => c.along > 1);
+  if (!dy) {
+    const level = cands.filter((c) => overlap(c.e, r));
+    cands = level.length || !col ? level : cands.filter((c) => !col.contains(c.el));
+  } else if (col) {
+    const inside = cands.filter((c) => col.contains(c.el));
+    cands = inside.length ? inside : cands.filter((c) => !c.el.closest('[data-col]'));
+  }
   const near = dy && least(cands, (c) => (dy > 0 ? c.e.top : -c.e.bottom));
   if (near) cands = cands.filter((c) => overlap(c.e, near.e));
   const best = least(cands, (c) => c.along + 2 * c.side)?.el; // prefer aligned targets
-  const into = best?.closest('[data-row]');
-  const target = (into !== row && into?.querySelector('[data-current], [aria-current]')) || best;
+  const into = best?.closest('[data-row], [data-col]');
+  const target = (into !== row && into !== col && into?.querySelector('[data-current], [aria-current]')) || best;
   if (!target) return dy < 0 && !atTop && scrollTo({ top: 0, behavior });
   // Focus alone jumps the page; glide it instead (scroll-margin still decides how much stays in view).
   target.focus({ preventScroll: true });

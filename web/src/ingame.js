@@ -566,8 +566,8 @@ export function ingame(adapter, saved, { variant } = {}) {
     const path = []; // indexes from the category down; the last can be an option whose values are on show
     openPanel('options', trigger, 'Opzioni emulatore',
       `<div class="ig-opts">
-        <div class="ig-cats" role="tablist" aria-orientation="vertical"></div>
-        <div class="ig-opt-list"><p class="ig-note">Carico le opzioni…</p></div>
+        <div class="ig-cats" role="tablist" aria-orientation="vertical" data-col></div>
+        <div class="ig-opt-list" data-col><p class="ig-note">Carico le opzioni…</p></div>
       </div>`, async (el, pn) => {
         const cats = el.querySelector('.ig-cats');
         const list = el.querySelector('.ig-opt-list');

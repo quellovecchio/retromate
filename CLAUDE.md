@@ -77,6 +77,9 @@ the old process alive: restart the `api` server after editing `server.py`.
   caches ROMs in IndexedDB keyed by that segment plus size, so a constant suffix made same-size ROMs collide.
 - `web/src/nav.js` does spatial focus navigation by lines (left/right stay on the line, up/down go to the nearest
   line; a `[data-row]` such as the cover flow or the tabs counts as one line and is entered on its current item;
+  a `[data-col]` is the other way round, for side-by-side lists whose lines don't align (the in-game options'
+  categories and options): up/down stay inside it and stop at its end, left/right leave it even with nothing level
+  and land on the other column's current item;
   the sticky top bar takes focus only with the page scrolled to the top: up with nothing above scrolls there first),
   A/Enter clicks, B/Esc goes where `<html data-back>` says (set by app.js: back in history from a console page;
   Home from Libreria/Opzioni only if the Opzioni switch is on), X (or the X key) fires a `pad-x` event on the focused element (toggles a favorite
@@ -95,7 +98,9 @@ the old process alive: restart the `api` server after editing `server.py`.
   150 video info on the data channel). The worker sends the offer. Input goes on the negotiated `data`
   channel as 14 bytes little-endian: `[buttons u16][LX LY RX RY L2 R2 i16]`, libretro joypad bit order.
   cloud-game identifies games by file stem, not by RetroMate id. OpenGL frames arrive bottom-up: honour the
-  `flip` flag in the video info.
+  `flip` flag in the video info. Opzioni's "Ottimizzazione giochi d'azione" (`getLowLatency`, per device, off by
+  default) sets `jitterBufferTarget = 0` on every receiver: Chrome's jitter buffer otherwise held RPCS3's uneven
+  frames ~80 ms (peaks of 150) of input lag; on, quicker controls and visible hitches when the game stutters.
 
 ## Stream server (cloud-game)
 
