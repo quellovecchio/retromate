@@ -13,13 +13,20 @@ emulator:
           vfr: true
           # Upstream cloud-game called context_destroy after retro_deinit and LRPS2 spun forever, hanging the worker on
           # close. stream/cloud-game.patch now calls it first, like RetroArch, but that is untested with LRPS2: kept.
-          hacks: ["skip_hw_context_destroy"]
+          # vulkan: the patch's Vulkan frontend is offered to this core. Its renderer stays "Auto": LRPS2 asks which API
+          # the frontend prefers, Vulkan where a Vulkan GPU exists (the NVIDIA host), OpenGL elsewhere (WSL2).
+          # paraLLEl-GS, the low-level renderer, is Vulkan only: pick it per game from the in-game menu.
+          hacks: ["skip_hw_context_destroy", "vulkan"]
           # cloud-game passes only these options to the core (no defaults), so the BIOS must be named here
           options:
             pcsx2_bios: ps2-0230e-20080220.bin  # file name in library/bios/ps2
             # the DualShock 2 boots in digital mode (sticks off) and libretro has no ANALOG button to press
             pcsx2_analog_mode1: enabled
             pcsx2_analog_mode2: enabled
+            # Auto asks the frontend which API it prefers (GET_PREFERRED_HW_RENDER): Vulkan with the "vulkan" hack below
+            # where a Vulkan GPU exists. Unset, LRPS2 got an empty value instead of its default and went straight to
+            # its fallback chain, OpenGL first.
+            pcsx2_renderer: Auto
         # Dolphin (Wii). OpenGL core profile, created the same way as LRPS2's. Its Sys files are baked into the image
         # (stream/Dockerfile); its User folder (Wii NAND, game saves) is library/saves/cloud-game (docker-compose.yml).
         # The emulated RAM lives in /dev/shm, hence shm_size there: Docker's 64 MB default ends in SIGBUS.
@@ -42,8 +49,10 @@ emulator:
             # the game from the in-game menu's options).
             dolphin_language: "5"
           # everything not listed keeps the core's default (Hardware renderer, native 640x528, JIT64)
-        # RPCS3 (PS3). Its default renderer, Vulkan, needs a Vulkan frontend, which cloud-game is not: OpenGL 4.5 core,
-        # drawn into our GLX context (it makes a shared one from it for its RSX thread). Firmware:
+        # RPCS3 (PS3). Vulkan, its main and fastest renderer. Not through the patch's Vulkan frontend (no "vulkan" hack):
+        # refused a frontend context, RPCS3 opens the Vulkan driver itself and hands each frame over in memory, its own
+        # tested path. Needs a Vulkan GPU (the NVIDIA host). "opengl" (in-game menu) draws into our GLX context instead,
+        # through a shared context it makes for its RSX thread. Firmware:
         # library/bios/ps3/PS3UPDAT.PUP, installed on the first start (minutes: the start waits up to 2, see the patch).
         # Its system folder (installed firmware, dev_hdd0 with the game saves, PPU/shader caches) is
         # library/saves/ps3/rpcs3 (docker-compose.yml). Decrypted ISOs, or redump ones with their .dkey beside them.
@@ -54,7 +63,7 @@ emulator:
           isGlAllowed: true
           vfr: true
           options:
-            rpcs3_renderer: opengl
+            rpcs3_renderer: vulkan
             rpcs3_language: italian
             rpcs3_license_area: eu
 encoder:

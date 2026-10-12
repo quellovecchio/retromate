@@ -127,8 +127,10 @@ the old process alive: restart the `api` server after editing `server.py`.
   The Wii system language is chosen in Opzioni (per device, Italian by default) and sent by `stream.js` in the start
   request as `options.dolphin_language` (a value saved for the game from the in-game menu wins); `stream/config.yaml`
   holds the default. Dolphin writes it to the NAND's SYSCONF (`IPL.LNG`).
-- PS3 runs on RPCS3 (`rpcs3_libretro`), forced to OpenGL (`rpcs3_renderer: opengl`; its default, Vulkan, needs a
-  Vulkan frontend). It makes its own shared GLX context from ours for its RSX thread. Firmware
+- PS3 runs on RPCS3 (`rpcs3_libretro`) with `rpcs3_renderer: vulkan` but without the `vulkan` hack: refused a
+  frontend Vulkan context, RPCS3 opens the Vulkan driver itself and hands frames over in memory (its own path,
+  "Vulkan without a hardware context"). `opengl` makes it draw into our GLX context through a shared context it
+  creates for its RSX thread. Firmware
   `library/bios/ps3/PS3UPDAT.PUP`, installed on the first start; its system folder (dev_flash, dev_hdd0 with the game
   saves, caches) is `library/saves/ps3/rpcs3`. `.iso` only: folder dumps are all named `PS3_DISC.SFB`, and cloud-game
   tells games apart by file stem. No save states (RPCS3 can't serialize). It links libOpenGL, libvulkan and libasound,
@@ -145,7 +147,17 @@ the old process alive: restart the `api` server after editing `server.py`.
   `docker-compose.nvidia.yml` is for a dedicated Linux host with the NVIDIA driver (`SERVER.md`, its `.env` uses `:`
   as separator): no Xvfb, the worker talks GLX to the host's headless Xorg (`xorg-headless.service`, display `:0`,
   socket mounted) and nvidia-container-toolkit mounts the driver's libraries, so GL is native. cloud-game creates its
-  GL context with GLX only (`graphics/rgfw.go`, no EGL), hence an X server either way; it has no Vulkan support.
+  GL context with GLX only (`graphics/rgfw.go`, no EGL), hence an X server either way.
+- Vulkan: upstream cloud-game hosted OpenGL only. The patch adds libretro's Vulkan frontend side
+  (`nanoarch/vulkan.c`, `vk.h`, `vulkan.go`, vendored `libretro_vulkan.h`): headless instance and device (through the
+  core's context negotiation interface when it has one; discrete GPU first, a CPU device like lavapipe only with
+  `RETROMATE_VULKAN_CPU` set), `GET_HW_RENDER_INTERFACE`, and each `set_image` copied into host memory as XRGB8888
+  in `video_refresh` (one frame in flight, so sync index 0). Offered only to cores with the `vulkan` hack in
+  `stream/config.yaml` and only where `vk_available()` finds a GPU: `GET_PREFERRED_HW_RENDER` then answers Vulkan
+  (OpenGL core otherwise, e.g. WSL2, which has no Vulkan driver in the container), and any other Vulkan
+  `SET_HW_RENDER` is refused (accepted, it used to fall into the GL path and crash with BadMatch). PS2 has the hack,
+  renderer left on `Auto`. A core that ends up with no hardware context runs as a software core (`gl.enabled` off).
+  Vulkan frames are top down: no `flip`.
 - `stream/config.yaml` overrides cloud-game's defaults. At start cloud-game passes only the core options listed
   there plus the start request's (no core defaults), which is why `pcsx2_bios` must name a file in `library/bios/ps2`.
   The VP8 encoder runs at 20 Mbit/s with `static-threshold=0` (upstream: 3.2 Mbit/s and 100, which froze FIFA 14's

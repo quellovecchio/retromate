@@ -8,7 +8,7 @@ FROM ubuntu:resolute AS build
 ARG COMMIT
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git make gcc pkg-config \
-    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libglib2.0-dev libx11-dev libgl1-mesa-dev
+    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libglib2.0-dev libx11-dev libgl1-mesa-dev libvulkan-dev
 ADD https://go.dev/dl/go1.27.1.linux-amd64.tar.gz /tmp/go.tgz
 RUN tar -C /usr/local -xzf /tmp/go.tgz
 ENV PATH=$PATH:/usr/local/go/bin
