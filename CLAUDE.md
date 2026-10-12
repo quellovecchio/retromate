@@ -130,7 +130,9 @@ the old process alive: restart the `api` server after editing `server.py`.
   Vulkan frontend). It makes its own shared GLX context from ours for its RSX thread. Firmware
   `library/bios/ps3/PS3UPDAT.PUP`, installed on the first start; its system folder (dev_flash, dev_hdd0 with the game
   saves, caches) is `library/saves/ps3/rpcs3`. `.iso` only: folder dumps are all named `PS3_DISC.SFB`, and cloud-game
-  tells games apart by file stem. No save states (RPCS3 can't serialize).
+  tells games apart by file stem. No save states (RPCS3 can't serialize). It links libOpenGL, libvulkan and libasound,
+  which the image only has because `stream/Dockerfile` installs them: a new core's missing library shows up as
+  `couldn't load the lib: ...` in the worker log, so check its DT_NEEDED first.
 - PS2 memory cards (`Mcd001.ps2`, `Mcd002.ps2`, shared by every game) are in `library/saves/ps2/memcards`, mounted on
   LRPS2's `system/pcsx2/memcards`. Anything a core writes outside a mounted folder dies with the container: check where
   a new core keeps its saves before trusting it.

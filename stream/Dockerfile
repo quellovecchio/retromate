@@ -28,8 +28,11 @@ FROM ${BASE}
 # - Linux with the NVIDIA driver: the host's Xorg, the NVIDIA libraries mounted by nvidia-container-toolkit
 #   (docker-compose.nvidia.yml, SERVER.md). Mesa is unused there.
 # libxi6, libegl1, libusb: linked by the Dolphin core (Wii), even though it renders through cloud-game's GLX context.
+# libopengl0, libvulkan1, libasound2t64: linked by the RPCS3 core (PS3), even in OpenGL mode; without them dlopen fails
+# ("libOpenGL.so.0: cannot open shared object file"). Check a new core's DT_NEEDED before trusting the image.
 RUN rm -f /usr/lib/x86_64-linux-gnu/libGL.so* && apt-get update && \
-    apt-get install -y --no-install-recommends libgl1 libglx-mesa0 libgl1-mesa-dri xvfb         libxi6 libegl1 libegl-mesa0 libusb-1.0-0 && \
+    apt-get install -y --no-install-recommends libgl1 libglx-mesa0 libgl1-mesa-dri xvfb         libxi6 libegl1 libegl-mesa0 libusb-1.0-0 \
+    libopengl0 libvulkan1 libasound2t64 && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/bin/coordinator /src/bin/worker ./
 # Dolphin's Sys folder (shaders, game settings, fonts): the core looks for it in libretro/system/dolphin-emu/Sys.
