@@ -337,6 +337,11 @@ prints it: `Video Info: NVIDIA Corporation, NVIDIA GeForce RTX 3070...`):
 docker compose logs cloud-game | grep -i -E 'video info|renderer'
 ```
 
+The video is encoded on the GPU too (NVENC, H.264: `docker-compose.nvidia.yml`). While a game streams, the `enc`
+column of `nvidia-smi dmon -s u` is above 0. A black stream with `gst pipeline error` in the log, or `no element
+"nvh264enc"`, means GStreamer found no NVENC: delete the `CLOUD_GAME_ENCODER_VIDEO_CODEC` line from
+`docker-compose.nvidia.yml` and `docker compose up -d` to go back to software VP8.
+
 ## 15. Copying the library over Samba
 
 A network share on `/data/retromate`, to drag and drop from Windows. Files written through it belong to your user,

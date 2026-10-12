@@ -8,7 +8,8 @@ services:
     environment:
       - DISPLAY=:0
       - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all # graphics (OpenGL/GLX) is not in the compute-only default
+      - NVIDIA_DRIVER_CAPABILITIES=all # graphics (OpenGL/GLX) is not in the compute-only default; video = NVENC
+      - CLOUD_GAME_ENCODER_VIDEO_CODEC=h264 # NVENC (stream/config.yaml); remove it to go back to software VP8
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
     # no Xvfb: wait for the host's Xorg (it may come up after Docker at boot)

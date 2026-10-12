@@ -26,7 +26,8 @@ const root = document.documentElement;
 // An open modal <dialog> is the whole world: the page behind it is inert.
 const focusables = () => [...(document.querySelector('dialog[open]') ?? document).querySelectorAll('a[href], button:not(:disabled), input:not(:disabled)')]
   // hidden ones measure at (0, 0) and would steal up/left moves; inert ones (behind a panel) can't take focus
-  .filter((el) => el.checkVisibility() && !el.closest('[inert]'));
+  // (checkVisibility: Chromium 105+; Samsung TVs before 2024 run older ones)
+  .filter((el) => (el.checkVisibility ? el.checkVisibility() : el.getClientRects().length > 0) && !el.closest('[inert]'));
 const inField = (el) => el?.matches?.('input, textarea');
 // Last input device, for components that behave differently with a controller (e.g. the gamepad keyboard).
 const setInput = (kind) => { if (root.dataset.input !== kind) root.dataset.input = kind; };
@@ -107,7 +108,7 @@ document.addEventListener('keydown', (e) => {
     if (typing && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return; // move the caret, not the focus
     e.preventDefault();
     act(e.key);
-  } else if (e.key === 'Escape' || (e.key === 'Backspace' && !typing)) {
+  } else if (e.key === 'Escape' || e.keyCode === 10009 || (e.key === 'Backspace' && !typing)) { // 10009: Tizen's Return
     e.preventDefault(); // one Back: an open <dialog> would also close itself on Esc
     act('Back');
   }
@@ -124,10 +125,13 @@ function poll(t) {
     if (!gp) continue;
     for (const [i, a] of Object.entries({ ...DPAD, ...SHOULDERS, ...faces(gp) })) if (gp.buttons[i]?.pressed) pressed.add(a);
     const [x = 0, y = 0] = gp.axes;
-    if (x < -DEADZONE) pressed.add('ArrowLeft');
-    if (x > DEADZONE) pressed.add('ArrowRight');
-    if (y < -DEADZONE) pressed.add('ArrowUp');
-    if (y > DEADZONE) pressed.add('ArrowDown');
+    // A pad the browser doesn't recognise (mapping '', e.g. on a Samsung TV's older Chromium) keeps Linux's raw layout:
+    // sticks and triggers on axes 0-5, the D-pad as a hat on axes 6 and 7 (-1, 0, 1) instead of buttons 12-15.
+    const [hx = 0, hy = 0] = gp.mapping !== 'standard' && gp.axes.length === 8 ? gp.axes.slice(6) : [];
+    if (x < -DEADZONE || hx < -0.5) pressed.add('ArrowLeft');
+    if (x > DEADZONE || hx > 0.5) pressed.add('ArrowRight');
+    if (y < -DEADZONE || hy < -0.5) pressed.add('ArrowUp');
+    if (y > DEADZONE || hy > 0.5) pressed.add('ArrowDown');
   }
   if (pressed.size) setInput('pad');
   for (const a in held) if (!pressed.has(a)) delete held[a];

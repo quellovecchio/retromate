@@ -38,8 +38,8 @@ export function setWiiLanguage(id) {
 
 // "Ottimizzazione giochi d'azione", chosen in Opzioni (per device, off by default). The browser holds frames back to
 // show them evenly: with RPCS3's uneven frame rate Chrome's jitter buffer measured ~80 ms, peaks of 150, all of it
-// input lag. On, it keeps that buffer as short as it can (jitterBufferTarget 0): quicker response, visible hitches
-// when the game or the network stutters.
+// input lag. On, it keeps the video's buffer as short as it can (jitterBufferTarget 0): quicker response, visible
+// hitches when the game or the network stutters. Best with emulators at steady full speed.
 const LOW_LATENCY_KEY = 'retromate-low-latency';
 export function getLowLatency() {
   try { return localStorage.getItem(LOW_LATENCY_KEY) === '1'; } catch { return false; }
@@ -166,8 +166,9 @@ export function stream(game, container, status, attempt = 0, ctl = { controls: s
       pc.addTransceiver('video', { direction: 'recvonly' });
       pc.addTransceiver('audio', { direction: 'recvonly' });
       pc.ontrack = (e) => {
-        // video and audio alike, so they stay in sync; browsers without it ignore the property
-        if (getLowLatency()) e.receiver.jitterBufferTarget = 0;
+        // video only: with audio's buffer at 0 too, Chrome stretched the sound when an emulator fell behind and sped
+        // it up to catch up, and the video, synced to it, slowed down and raced. Browsers without it ignore it.
+        if (getLowLatency() && e.track.kind === 'video') e.receiver.jitterBufferTarget = 0;
         media.addTrack(e.track);
       };
       pc.onicecandidate = (e) => e.candidate && send(T.SIGNAL, { ice: JSON.stringify(e.candidate) });

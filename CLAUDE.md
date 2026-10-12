@@ -99,13 +99,15 @@ the old process alive: restart the `api` server after editing `server.py`.
   channel as 14 bytes little-endian: `[buttons u16][LX LY RX RY L2 R2 i16]`, libretro joypad bit order.
   cloud-game identifies games by file stem, not by RetroMate id. OpenGL frames arrive bottom-up: honour the
   `flip` flag in the video info. Opzioni's "Ottimizzazione giochi d'azione" (`getLowLatency`, per device, off by
-  default) sets `jitterBufferTarget = 0` on every receiver: Chrome's jitter buffer otherwise held RPCS3's uneven
-  frames ~80 ms (peaks of 150) of input lag; on, quicker controls and visible hitches when the game stutters.
+  default) sets `jitterBufferTarget = 0` on the video receiver: Chrome's jitter buffer otherwise held RPCS3's uneven
+  frames ~80 ms (peaks of 150) of input lag; on, quicker controls and visible hitches when the game stutters. Not on
+  audio: there NetEq stretched and then sped up the sound whenever the emulator fell behind, and the video, synced
+  to it, slowed down and raced.
 
 ## Stream server (cloud-game)
 
 - `stream/Dockerfile` = the official cloud-game image pinned by digest, with the coordinator and worker
-  rebuilt from commit `1fab9ef` plus `stream/cloud-game.patch`, and with system Mesa + Xvfb (GLX) replacing the bundled
+  rebuilt from commit `1fab9ef` plus `stream/cloud-game.patch`, GStreamer rebuilt with NVENC, and with system Mesa + Xvfb (GLX) replacing the bundled
   llvmpipe libGL. The patch fixes cloud-game bugs found here (variable frame size, GStreamer segtrap vs PCSX2
   fastmem, GL context bound to the loading thread, `context_destroy` called after `retro_deinit` instead of before
   unloading (libretro's and RetroArch's order; Dolphin hung the worker on close, or with it skipped the NVIDIA driver
@@ -170,7 +172,11 @@ the old process alive: restart the `api` server after editing `server.py`.
   there plus the start request's (no core defaults), which is why `pcsx2_bios` must name a file in `library/bios/ps2`.
   The VP8 encoder runs at 20 Mbit/s with `static-threshold=0` (upstream: 3.2 Mbit/s and 100, which froze FIFA 14's
   low-contrast pitch into 16x16 blocks), `max-quantizer=40` and `undershoot=50` (upstream 63 and 100: Kingdom Hearts'
-  dark scenes broke into JPEG-like blocks). `ps2` uses
+  dark scenes broke into JPEG-like blocks). The NVIDIA host encodes H.264 on the GPU instead (NVENC, `nvh264enc`,
+  same bitrate): `docker-compose.nvidia.yml` sets `CLOUD_GAME_ENCODER_VIDEO_CODEC=h264`, and `stream/Dockerfile`
+  rebuilds the image's GStreamer (same version and options) with the `nvcodec` plugin, which the official image lacks.
+  Software VP8 took whole CPU cores from RPCS3. cloud-game writes no encoder element for h264, so the config's `params`
+  start with it. `ps2` uses
   `skip_hw_context_destroy`, otherwise the worker hangs when a game closes.
 - One worker = one game at a time. After testing a streamed game in the browser pane, navigate away from
   `play.html` and confirm the slot is free, or the user's own launch is refused.

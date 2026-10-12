@@ -20,7 +20,31 @@ RUN git apply *.patch && make build.coordinator build.worker GIT_VERSION=$COMMIT
 ADD https://buildbot.libretro.com/assets/system/Dolphin.zip /tmp/Dolphin.zip
 RUN apt-get install -y --no-install-recommends unzip && unzip -q /tmp/Dolphin.zip -d /dolphin
 
+# GStreamer again, the official image's build (same version, same options) plus nvcodec: NVENC hardware encoding
+# (nvh264enc) for the NVIDIA host, where software VP8 took whole CPU cores from RPCS3/LRPS2. No CUDA needed to build:
+# the plugin loads libcuda and libnvidia-encode at run time (mounted by nvidia-container-toolkit) and registers
+# nothing without them, so the WSL2 host keeps VP8.
+FROM ubuntu:resolute AS gst
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates build-essential flex bison \
+    meson ninja-build python3 libglib2.0-dev liborc-0.4-dev libopus-dev libvpx-dev
+RUN git clone --single-branch --depth 1 --branch 1.29.2 https://gitlab.freedesktop.org/gstreamer/gstreamer.git /gst
+WORKDIR /gst
+RUN sed -i '1i if get_option('"'"'doc'"'"').disabled()\n  subdir_done()\nendif' subprojects/gst-plugins-good/docs/meson.build && \
+    meson setup builddir --prefix=/usr/local --buildtype=release -Doptimization=3 -Db_lto=true \
+    -Dauto_features=disabled -Dextra-checks=disabled -Dbenchmarks=disabled -Dtools=disabled -Dgstreamer:tools=disabled \
+    -Dbase=enabled -Dgood=enabled -Dbad=enabled -Dugly=disabled -Dlibav=disabled -Dges=disabled -Drtsp_server=disabled \
+    -Drs=disabled -Dpython=disabled -Dsharp=disabled -Dintrospection=disabled -Ddoc=disabled -Dtests=disabled \
+    -Dexamples=disabled -Dnls=disabled -Dorc=enabled -Dgpl=disabled -Dlibnice=disabled -Dtls=disabled \
+    -Dgst-plugins-base:app=enabled -Dgst-plugins-base:videoconvertscale=enabled \
+    -Dgst-plugins-base:audioresample=enabled -Dgst-plugins-base:opus=enabled -Dgst-plugins-good:vpx=enabled \
+    -Dgst-plugins-bad:nvcodec=enabled && \
+    meson compile -C builddir && meson install -C builddir && find /usr/local/lib -name "*.so*" -exec strip {} \;
+
 FROM ${BASE}
+# the official GStreamer, rebuilt above with nvcodec
+COPY --from=gst /usr/local/lib/x86_64-linux-gnu/libgst* /usr/local/lib/x86_64-linux-gnu/
+COPY --from=gst /usr/local/lib/x86_64-linux-gnu/gstreamer-1.0/ /usr/local/lib/x86_64-linux-gnu/gstreamer-1.0/
 # GL goes through glvnd (libgl1), which picks the driver of the X server it talks to:
 # - Docker Desktop/WSL2: Xvfb in this container + system Mesa, d3d12 on the GPU (docker-compose.wsl.yml);
 #   Mesa replaces the image's bundled llvmpipe-only libGL, which stays the fallback without it.
