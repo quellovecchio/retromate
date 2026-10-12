@@ -16,6 +16,7 @@ export const CASES = {
   psx: { mm: [142, 125, 10], kind: 'case', hue: 200, short: 'PS1' }, // CD jewel case
   ps2: { mm: [135, 190, 15], kind: 'case', hue: 258, short: 'PS2' },
   wii: { mm: [135, 190, 14], kind: 'case', white: true, hue: 60, short: 'Wii' }, // white DVD keep case
+  ps3: { mm: [135, 170, 12], kind: 'case', hue: 214, short: 'PS3' }, // Blu-ray keep case
 };
 export const caseOf = (slug) => CASES[slug] ?? CASES.gba;
 const ratios = new Map(); // cover URL -> width/height, so a redrawn box (turntable, next visit) starts right

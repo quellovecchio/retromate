@@ -46,6 +46,8 @@ PLATFORMS = {
     "psx": dict(name="PlayStation", thumbs="Sony - PlayStation", runner="browser", core="psx", exts=".chd .pbp .bin"),
     "ps2": dict(name="PlayStation 2", thumbs="Sony - PlayStation 2", runner="stream", core="pcsx2", local="play", exts=".iso .chd .cso .zso .ciso .m3u"),
     "wii": dict(name="Wii", thumbs="Nintendo - Wii", runner="stream", core="dolphin", exts=".iso .wbfs .rvz .gcz .ciso .wia"),
+    # RPCS3 takes folder dumps too, but they are all named PS3_DISC.SFB and cloud-game tells games apart by file name
+    "ps3": dict(name="PlayStation 3", thumbs="Sony - PlayStation 3", runner="stream", core="rpcs3", exts=".iso"),
 }
 
 

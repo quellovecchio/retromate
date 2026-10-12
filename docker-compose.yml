@@ -29,6 +29,10 @@ services:
       # PS2 memory cards: LRPS2 keeps them in its system folder, not the save one; without this they lived in the
       # container and every recreate (docker compose up after a build) handed out blank cards
       - ${RETROMATE_LIBRARY:-./library}/saves/ps2/memcards:/usr/local/share/cloud-game/libretro/system/pcsx2/memcards
+      # PS3: RPCS3's system folder (installed firmware, dev_hdd0 with the game saves, PPU/shader caches), and the
+      # firmware it installs from on the first start (library/bios/ps3/PS3UPDAT.PUP)
+      - ${RETROMATE_LIBRARY:-./library}/saves/ps3/rpcs3:/usr/local/share/cloud-game/libretro/system/rpcs3
+      - ${RETROMATE_LIBRARY:-./library}/bios/ps3:/usr/local/share/cloud-game/libretro/system/rpcs3/firmware
       # save states, next to the browser games' ones: the worker writes {platform}/{game}/{ms}.state (stream/cloud-game.patch)
       - ${RETROMATE_LIBRARY:-./library}/states:/usr/local/share/cloud-game/states
     restart: unless-stopped

@@ -98,6 +98,21 @@ index d8c7324..6ac47b5 100644
  	}
  	GameInfo struct {
  		Alias  string `json:"alias"`
+diff --git a/pkg/com/net.go b/pkg/com/net.go
+index 35be93a..bc14bca 100644
+--- a/pkg/com/net.go
++++ b/pkg/com/net.go
+@@ -71,7 +71,9 @@ type request struct {
+ 	response []byte
+ }
+ 
+-const DefaultCallTimeout = 10 * time.Second
++// A game start answers once the core has loaded the game: RPCS3 installs the PS3 firmware and compiles the game the
++// first time, minutes rather than seconds.
++const DefaultCallTimeout = 2 * time.Minute
+ 
+ var errCanceled = errors.New("canceled")
+ var errTimeout = errors.New("timeout")
 diff --git a/pkg/coordinator/user.go b/pkg/coordinator/user.go
 index d11b144..f226a6f 100644
 --- a/pkg/coordinator/user.go
@@ -536,7 +551,7 @@ index 669862d..34d3e31 100644
  
          case RETRO_DEVICE_ANALOG:
 diff --git a/pkg/worker/caged/libretro/nanoarch/nanoarch.go b/pkg/worker/caged/libretro/nanoarch/nanoarch.go
-index a451aeb..5a7acfd 100644
+index a451aeb..359e68e 100644
 --- a/pkg/worker/caged/libretro/nanoarch/nanoarch.go
 +++ b/pkg/worker/caged/libretro/nanoarch/nanoarch.go
 @@ -7,6 +7,7 @@ import (
@@ -648,7 +663,22 @@ index a451aeb..5a7acfd 100644
  func (n *Nanoarch) Shutdown() {
  	Nan0.audioBuffCb = nil
  	if n.LibCo {
-@@ -411,6 +456,7 @@ func (n *Nanoarch) Shutdown() {
+@@ -392,6 +437,14 @@ func (n *Nanoarch) Shutdown() {
+ 				if err := n.glCtx.BindContext(); err != nil {
+ 					n.log.Error().Err(err).Msg("ctx switch fail")
+ 				}
++				// libretro's order (RetroArch's too): context_destroy while the core still runs, before unloading it.
++				// Called after retro_deinit (deinitVideo, below) the core is already gone: LRPS2 spun forever and
++				// Dolphin hung the worker. Skipped, Dolphin's shader threads kept their shared GL contexts alive
++				// while ours was destroyed, and the NVIDIA driver lost the GPU (Xid 79).
++				if !Nan0.hackSkipHwContextDestroy && Nan0.Video.hw.context_destroy != nil {
++					C.bridge_context_reset(Nan0.Video.hw.context_destroy)
++					Nan0.hackSkipHwContextDestroy = true // done: deinitVideo must not call it again
++				}
+ 			})
+ 		}
+ 		C.bridge_call(retroUnloadGame)
+@@ -411,6 +464,7 @@ func (n *Nanoarch) Shutdown() {
  	}
  	n.options = nil
  	n.options4rom = nil
@@ -656,7 +686,7 @@ index a451aeb..5a7acfd 100644
  	Nan0.audioBuffCb = nil
  	n.freeCStrings()
  }
-@@ -830,6 +876,32 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
+@@ -830,6 +884,32 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
  			return true
  		}
  		return false
@@ -689,7 +719,7 @@ index a451aeb..5a7acfd 100644
  	case C.RETRO_ENVIRONMENT_GET_VARIABLE:
  		if Nan0.options == nil {
  			return false
-@@ -858,28 +930,13 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
+@@ -858,28 +938,13 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
  		}
  		return false
  	case C.RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:

@@ -375,3 +375,45 @@ Over wired gigabit expect roughly 100 MB/s (90 GB in about 15 minutes); Wi-Fi is
 (`retromate.db` from the project folder into `\\SERVER_IP\retromate`) to keep play time, favourites and recent games:
 if RetroMate already runs on the server, stop it first (`sudo systemctl stop retromate`) so it doesn't overwrite the
 file you drop in, then start it again.
+
+The stream container runs as root: folders Docker creates for its volumes, and files the emulators write (memory
+cards, Wii NAND, states), belong to root, and Samba (your user) can't overwrite them ("Access denied", error 5, in
+robocopy). Give them back before copying, with the container stopped:
+
+```
+cd /srv/retromate && docker compose stop cloud-game
+sudo chown -R $USER: /data/retromate && sudo chmod -R u+rwX /data/retromate
+```
+
+## 16. Updating
+
+After a `git push` from the development machine:
+
+```
+cd /srv/retromate
+git pull origin main
+uv sync && npm --prefix web ci && npm --prefix web run build
+sudo systemctl restart retromate
+docker compose up -d --build
+```
+
+`--build` rebuilds the stream image when `stream/Dockerfile` or `stream/cloud-game.patch` changed (the Go build takes
+a few minutes), and `up -d` recreates the container when its configuration changed (`stream/config.yaml`,
+`docker-compose*.yml`). A failed build leaves the running container as it was: the error is in the build output.
+
+## 17. PS3 (RPCS3)
+
+Before the first start, as your user (so Docker doesn't create them as root):
+
+```
+mkdir -p /data/retromate/library/roms/ps3 /data/retromate/library/bios/ps3 /data/retromate/library/saves/ps3/rpcs3
+```
+
+- **Firmware:** download `PS3UPDAT.PUP` from Sony's PlayStation 3 system software update page and put it in
+  `library/bios/ps3`. RPCS3 installs it on the first PS3 start (a few minutes: the browser shows the loading message
+  meanwhile); the installed copy stays in `library/saves/ps3/rpcs3/dev_flash`.
+- **Games:** `.iso` files in `library/roms/ps3`, decrypted, or redump images with their `.dkey` (same name) beside
+  them. The first start of each game compiles it (minutes, then cached in `library/saves/ps3/rpcs3/cache`).
+- **Saves:** in the PS3's own storage, `library/saves/ps3/rpcs3/dev_hdd0` (back it up with the rest). There are no
+  save states: RPCS3 can't make them, so the in-game menu's Salva stato fails for PS3 games.
+- RPCS3 is very CPU-heavy: expect it to be the limit, not the GPU.

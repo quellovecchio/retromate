@@ -102,7 +102,10 @@ the old process alive: restart the `api` server after editing `server.py`.
 - `stream/Dockerfile` = the official cloud-game image pinned by digest, with the coordinator and worker
   rebuilt from commit `1fab9ef` plus `stream/cloud-game.patch`, and with system Mesa + Xvfb (GLX) replacing the bundled
   llvmpipe libGL. The patch fixes cloud-game bugs found here (variable frame size, GStreamer segtrap vs PCSX2
-  fastmem, GL context bound to the loading thread, slot leak on failed start, rescan on unknown game,
+  fastmem, GL context bound to the loading thread, `context_destroy` called after `retro_deinit` instead of before
+  unloading (libretro's and RetroArch's order; Dolphin hung the worker on close, or with it skipped the NVIDIA driver
+  lost the GPU), coordinator-to-worker calls timing out after 10 s (now 2 min: RPCS3's first start installs the
+  firmware), slot leak on failed start, rescan on unknown game,
   `RETRO_DEVICE_ID_JOYPAD_MASK`, early `retro_serialize_size` crashing Dolphin, game loads blocking the WebSocket
   read loop so slow-loading games timed out the coordinator link, per-launch core options in the start request,
   core options read and changed at run time (the core's own declarations, any libretro API version: GetOptions 115
@@ -123,6 +126,11 @@ the old process alive: restart the `api` server after editing `server.py`.
   The Wii system language is chosen in Opzioni (per device, Italian by default) and sent by `stream.js` in the start
   request as `options.dolphin_language` (a value saved for the game from the in-game menu wins); `stream/config.yaml`
   holds the default. Dolphin writes it to the NAND's SYSCONF (`IPL.LNG`).
+- PS3 runs on RPCS3 (`rpcs3_libretro`), forced to OpenGL (`rpcs3_renderer: opengl`; its default, Vulkan, needs a
+  Vulkan frontend). It makes its own shared GLX context from ours for its RSX thread. Firmware
+  `library/bios/ps3/PS3UPDAT.PUP`, installed on the first start; its system folder (dev_flash, dev_hdd0 with the game
+  saves, caches) is `library/saves/ps3/rpcs3`. `.iso` only: folder dumps are all named `PS3_DISC.SFB`, and cloud-game
+  tells games apart by file stem. No save states (RPCS3 can't serialize).
 - PS2 memory cards (`Mcd001.ps2`, `Mcd002.ps2`, shared by every game) are in `library/saves/ps2/memcards`, mounted on
   LRPS2's `system/pcsx2/memcards`. Anything a core writes outside a mounted folder dies with the container: check where
   a new core keeps its saves before trusting it.
