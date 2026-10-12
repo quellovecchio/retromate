@@ -170,7 +170,8 @@ the old process alive: restart the `api` server after editing `server.py`.
   Vulkan frames are top down: no `flip`.
 - `stream/config.yaml` overrides cloud-game's defaults. At start cloud-game passes only the core options listed
   there plus the start request's (no core defaults), which is why `pcsx2_bios` must name a file in `library/bios/ps2`.
-  The VP8 encoder runs at 20 Mbit/s with `static-threshold=0` (upstream: 3.2 Mbit/s and 100, which froze FIFA 14's
+  Encoder settings go in `encoder.list` (beside `encoder.video`; nested inside it they are silently ignored, which they
+  were until 2026-10). The VP8 encoder runs at 20 Mbit/s with `static-threshold=0` (upstream: 3.2 Mbit/s and 100, which froze FIFA 14's
   low-contrast pitch into 16x16 blocks), `max-quantizer=40` and `undershoot=50` (upstream 63 and 100: Kingdom Hearts'
   dark scenes broke into JPEG-like blocks). The NVIDIA host encodes H.264 on the GPU instead (NVENC, `nvh264enc`,
   same bitrate): `docker-compose.nvidia.yml` sets `CLOUD_GAME_ENCODER_VIDEO_CODEC=h264`, and `stream/Dockerfile`

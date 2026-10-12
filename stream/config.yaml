@@ -70,26 +70,27 @@ emulator:
             rpcs3_language: italian
             rpcs3_license_area: eu
 encoder:
-  video:
-    list:
-      vp8:
-        # Upstream defaults with these changes. 20 Mbit/s instead of 3.2: the stream is LAN-only and PS2 games are full
-        # of fine detail. static-threshold=0 instead of 100: above it libvpx skips macroblocks that change "too little",
-        # so low-contrast textures (FIFA 14's pitch) froze into 16x16 squares that were never refreshed.
-        # max-quantizer=40 instead of 63 and undershoot=50 instead of 100: dark scenes and gradients (Kingdom Hearts)
-        # broke into JPEG-like blocks; this caps the worst quality per frame, at the cost of overshooting the bitrate.
-        params: >-
-          keyframe-mode=disabled tuning=ssim cpu-used=6 target-bitrate=20000000 deadline=1 sharpness=1 end-usage=cbr
-          static-threshold=0 max-quantizer=40
-          error-resilient=default+partitions overshoot=20 undershoot=50
-      # NVENC on the NVIDIA host (docker-compose.nvidia.yml picks it with CLOUD_GAME_ENCODER_VIDEO_CODEC=h264): the GPU
-      # encodes, the CPU stays with the emulator. cloud-game writes no element for h264 (its x264 case is commented
-      # out), so params start with the element itself. Same 20 Mbit/s as VP8; ultra-low-latency, no B-frames, no
-      # periodic keyframes (gop-size=-1: cloud-game forces one every keyframeInterval frames, SPS/PPS included);
-      # vbv-buffer-size ~3 frames at 60 fps, so those keyframes aren't starved into blocks. Constrained baseline:
-      # every WebRTC H.264 decoder takes it (the AUDs, which the RTP packetizer drops anyway, are off).
-      h264:
-        params: >-
-          nvh264enc name=video_enc preset=p4 tune=ultra-low-latency rc-mode=cbr bitrate=20000 vbv-buffer-size=1000
-          gop-size=-1 zerolatency=true repeat-sequence-header=true aud=false
-        caps: video/x-h264,stream-format=byte-stream,alignment=au,profile=constrained-baseline
+  # cloud-game reads the encoders from encoder.list, beside encoder.video (pkg/config: Encoder.List). Until
+  # 2026-10 this sat under encoder.video and was ignored: VP8 ran on upstream's defaults.
+  list:
+    vp8:
+      # Upstream defaults with these changes. 20 Mbit/s instead of 3.2: the stream is LAN-only and PS2 games are full
+      # of fine detail. static-threshold=0 instead of 100: above it libvpx skips macroblocks that change "too little",
+      # so low-contrast textures (FIFA 14's pitch) froze into 16x16 squares that were never refreshed.
+      # max-quantizer=40 instead of 63 and undershoot=50 instead of 100: dark scenes and gradients (Kingdom Hearts)
+      # broke into JPEG-like blocks; this caps the worst quality per frame, at the cost of overshooting the bitrate.
+      params: >-
+        keyframe-mode=disabled tuning=ssim cpu-used=6 target-bitrate=20000000 deadline=1 sharpness=1 end-usage=cbr
+        static-threshold=0 max-quantizer=40
+        error-resilient=default+partitions overshoot=20 undershoot=50
+    # NVENC on the NVIDIA host (docker-compose.nvidia.yml picks it with CLOUD_GAME_ENCODER_VIDEO_CODEC=h264): the GPU
+    # encodes, the CPU stays with the emulator. cloud-game writes no element for h264 (its x264 case is commented
+    # out), so params start with the element itself. Same 20 Mbit/s as VP8; ultra-low-latency, no B-frames, no
+    # periodic keyframes (gop-size=-1: cloud-game forces one every keyframeInterval frames, SPS/PPS included);
+    # vbv-buffer-size ~3 frames at 60 fps, so those keyframes aren't starved into blocks. Constrained baseline:
+    # every WebRTC H.264 decoder takes it (the AUDs, which the RTP packetizer drops anyway, are off).
+    h264:
+      params: >-
+        nvh264enc name=video_enc preset=p4 tune=ultra-low-latency rc-mode=cbr bitrate=20000 vbv-buffer-size=1000
+        gop-size=-1 zerolatency=true repeat-sequence-header=true aud=false
+      caps: video/x-h264,stream-format=byte-stream,alignment=au,profile=constrained-baseline
