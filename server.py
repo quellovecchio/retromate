@@ -54,6 +54,8 @@ PLATFORMS = {
     "wii": dict(name="Wii", thumbs="Nintendo - Wii", runner="stream", core="dolphin", exts=".iso .wbfs .rvz .gcz .ciso .wia"),
     # RPCS3 takes folder dumps too, but they are all named PS3_DISC.SFB and cloud-game tells games apart by file name
     "ps3": dict(name="PlayStation 3", thumbs="Sony - PlayStation 3", runner="stream", core="rpcs3", exts=".iso"),
+    # Eden through a bridge core (stream/eden_bridge.c). libretro-thumbnails has no Switch folder yet: titles only
+    "switch": dict(name="Nintendo Switch", thumbs="Nintendo - Nintendo Switch", runner="stream", core="eden", exts=".nsp .xci"),
 }
 
 

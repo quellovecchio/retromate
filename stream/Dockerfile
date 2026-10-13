@@ -8,7 +8,8 @@ FROM ubuntu:resolute AS build
 ARG COMMIT
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git make gcc pkg-config \
-    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libglib2.0-dev libx11-dev libgl1-mesa-dev libvulkan-dev
+    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libglib2.0-dev libx11-dev libgl1-mesa-dev libvulkan-dev \
+    libxcb1-dev libxcb-shm0-dev libpulse-dev
 ADD https://go.dev/dl/go1.27.1.linux-amd64.tar.gz /tmp/go.tgz
 RUN tar -C /usr/local -xzf /tmp/go.tgz
 ENV PATH=$PATH:/usr/local/go/bin
@@ -19,6 +20,10 @@ RUN git apply *.patch && make build.coordinator build.worker GIT_VERSION=$COMMIT
 # Dolphin (Wii) system files, unpacked here: the runtime image has no unzip
 ADD https://buildbot.libretro.com/assets/system/Dolphin.zip /tmp/Dolphin.zip
 RUN apt-get install -y --no-install-recommends unzip && unzip -q /tmp/Dolphin.zip -d /dolphin
+# Switch: the bridge core that runs Eden (stream/eden_bridge.c), built against cloud-game's libretro.h
+COPY eden_bridge.c ./
+RUN gcc -O2 -Wall -shared -fPIC -I pkg/worker/caged/libretro/nanoarch eden_bridge.c -o /eden_bridge_libretro.so \
+    -lxcb -lxcb-shm -lpulse-simple -lpulse -lpthread
 
 # GStreamer again, the official image's build (same version, same options) plus nvcodec: NVENC hardware encoding
 # (nvh264enc) for the NVIDIA host, where software VP8 took whole CPU cores from RPCS3/LRPS2. No CUDA needed to build:
@@ -58,8 +63,16 @@ COPY --from=gst /usr/local/lib/x86_64-linux-gnu/gstreamer-1.0/ /usr/local/lib/x8
 # ("libOpenGL.so.0: cannot open shared object file"). Check a new core's DT_NEEDED before trusting the image.
 RUN rm -f /usr/lib/x86_64-linux-gnu/libGL.so* && apt-get update && \
     apt-get install -y --no-install-recommends libgl1 libglx-mesa0 libgl1-mesa-dri xvfb         libxi6 libegl1 libegl-mesa0 libusb-1.0-0 \
-    libopengl0 libvulkan1 libasound2t64 && \
+    libopengl0 libvulkan1 libasound2t64 \
+    pulseaudio libxcb-shm0 \
+    libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+    libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libfontconfig1 libdbus-1-3 && \
     rm -rf /var/lib/apt/lists/*
 COPY --from=build /src/bin/coordinator /src/bin/worker ./
 # Dolphin's Sys folder (shaders, game settings, fonts): the core looks for it in libretro/system/dolphin-emu/Sys.
 COPY --from=build /dolphin /usr/local/share/cloud-game/libretro/system
+# The Switch bridge core. pulseaudio (above) is its sound server; the libxcb-*, libxkbcommon-x11, fontconfig and dbus
+# libraries are what Qt's X11 plugin loads, in case Eden's AppImage doesn't bundle them. assets/cores is a volume (the
+# cores cloud-game downloads), which hides anything the image puts there: the core is copied in at every start.
+COPY --from=build /eden_bridge_libretro.so /usr/local/lib/retromate/
+ENTRYPOINT ["sh", "-c", "cp /usr/local/lib/retromate/*.so assets/cores/ && exec \"$0\" \"$@\""]

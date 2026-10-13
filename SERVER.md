@@ -245,8 +245,8 @@ sudo ufw enable
 
 ## 12. Backups
 
-Worth keeping, all in `/data/retromate`: `library/saves`, `library/states`, `library/options`, `library/controls` and
-`retromate.db`. ROMs can be copied again. A periodic `rsync` to another machine or a NAS is enough.
+Worth keeping, all in `/data/retromate`: `library/saves` (Switch keys and firmware included), `library/states`,
+`library/options`, `library/controls` and `retromate.db`. ROMs can be copied again. A periodic `rsync` to another machine or a NAS is enough.
 
 ## 13. Headless Xorg on the GPU
 
@@ -473,3 +473,32 @@ mkdir -p /data/retromate/library/roms/ps3 /data/retromate/library/bios/ps3 /data
 - **Saves:** in the PS3's own storage, `library/saves/ps3/rpcs3/dev_hdd0` (back it up with the rest). There are no
   save states: RPCS3 can't make them, so the in-game menu's Salva stato fails for PS3 games.
 - RPCS3 is very CPU-heavy: expect it to be the limit, not the GPU.
+
+## 18. Switch (Eden)
+
+There is no libretro core for the Switch. RetroMate's own bridge core (`stream/eden_bridge.c`) runs Eden, a Switch
+emulator, on the GPU's X display and streams it like any other console. Eden itself is not in the image: you provide
+it, along with the keys and firmware from **your own** Switch.
+
+Load the kernel's `uinput` module, now and at every boot: the bridge creates a virtual gamepad for Eden through it, and
+`docker-compose.nvidia.yml` passes `/dev/uinput` to the container (without the module, the stream server won't start):
+
+```
+sudo modprobe uinput && echo uinput | sudo tee /etc/modules-load.d/uinput.conf
+mkdir -p /data/retromate/library/roms/switch /data/retromate/library/saves/switch/user/keys
+```
+
+Then `docker compose up -d --build`. Everything Eden uses is in `library/saves/switch` (backed up with the saves):
+
+- **Eden:** the Linux AppImage (`Eden-*.AppImage`) from the official site, https://eden-emu.dev, straight into
+  `library/saves/switch`. Not from GitHub search results: many repositories there are fakes that ship malware.
+  The first start after a container restart unpacks it (some seconds more).
+- **Keys:** `prod.keys` (and `title.keys`, if you have them) dumped from your console, in
+  `library/saves/switch/user/keys`.
+- **Firmware:** dumped from your console, its `.nca` files in `library/saves/switch/user/nand/system/Contents/registered`.
+- **Games:** `.nsp` or `.xci` in `library/roms/switch`. Updates and DLC aren't installed by RetroMate.
+- **Saves:** the Switch's own, in `library/saves/switch/user/nand/user/save`. No save states: Eden has none to offer.
+
+`user` is Eden's portable folder: its settings are `user/config/qt-config.ini`, where the bridge rewrites the
+`player_0_*` controller entries at every start (any other setting you change there stays). Problems: the worker's
+`Eden bridge:` lines (`docker compose logs cloud-game | grep -i eden`) and Eden's own log, `user/log/eden_log.txt`.

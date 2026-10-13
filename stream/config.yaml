@@ -83,6 +83,14 @@ emulator:
             rpcs3_renderer: vulkan
             rpcs3_language: italian
             rpcs3_license_area: eu
+        # Switch: no libretro core exists, so this one (stream/eden_bridge.c, built into the image) runs Eden, the
+        # user's AppImage in library/saves/switch, on the X display and streams what it shows. A software core: it
+        # hands over the X screen's pixels, no GL context of ours. Needs the NVIDIA host (Vulkan) and its uinput
+        # setup (docker-compose.nvidia.yml, SERVER.md).
+        switch:
+          lib: eden_bridge_libretro
+          folder: switch
+          roms: ["nsp", "xci"]
 encoder:
   # cloud-game reads the encoders from encoder.list, beside encoder.video (pkg/config: Encoder.List). Until
   # 2026-10 this sat under encoder.video and was ignored: VP8 ran on upstream's defaults.

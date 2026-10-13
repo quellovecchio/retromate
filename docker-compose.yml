@@ -33,6 +33,9 @@ services:
       # firmware it installs from on the first start (library/bios/ps3/PS3UPDAT.PUP)
       - ${RETROMATE_LIBRARY:-./library}/saves/ps3/rpcs3:/usr/local/share/cloud-game/libretro/system/rpcs3
       - ${RETROMATE_LIBRARY:-./library}/bios/ps3:/usr/local/share/cloud-game/libretro/system/rpcs3/firmware
+      # Switch: Eden's AppImage and its portable "user" folder (keys, firmware, NAND with the game saves, shader cache,
+      # config), all in one place, the place that gets backed up (stream/eden_bridge.c)
+      - ${RETROMATE_LIBRARY:-./library}/saves/switch:/usr/local/share/cloud-game/libretro/system/switch
       # save states, next to the browser games' ones: the worker writes {platform}/{game}/{ms}.state (stream/cloud-game.patch)
       - ${RETROMATE_LIBRARY:-./library}/states:/usr/local/share/cloud-game/states
     restart: unless-stopped

@@ -163,6 +163,18 @@ the old process alive: restart the `api` server after editing `server.py`.
 - GameCube (`ngc`) streams on the Wii's Dolphin core, its own entry in `stream/config.yaml` because port 1 takes the
   GameCube pad (`hid: 0: [1]`). Same User folder, so its memory cards sit beside the Wii NAND; `dolphin_language`
   from Opzioni sets its language too (PAL games).
+- Switch has no libretro core: `stream/eden_bridge.c` is one that emulates nothing. It starts Eden (the user's
+  AppImage, unpacked with `APPIMAGE_EXTRACT_AND_RUN`: no FUSE in containers) fullscreen on the worker's X display and
+  hands cloud-game the X screen every `retro_run` (XRGB8888 via MIT-SHM with a memfd, SHM 1.2, so no shared IPC
+  namespace), the sound of a private PulseAudio whose null sink is Eden's output (its monitor recorded on a thread),
+  and RetroPad port 0 as a uinput gamepad (Xbox 360 ids, D-pad as a hat). Eden reads that pad through SDL from the
+  controller entries the bridge rewrites at every start in `user/config/qt-config.ini` (`player_0_*`, each with
+  `\default=false` or Eden ignores it; SDL GUID with the name CRC zeroed as Eden stores it, buttons numbered in evdev
+  code order: `gcc -DEDEN_BRIDGE_TEST` builds its self-check). Everything Eden keeps is in `library/saves/switch`
+  (mounted on `libretro/system/switch`): the AppImage and its portable `user` folder (a `user` directory in its
+  working directory). The image builds the core and copies it into the `assets/cores` volume at every start
+  (`ENTRYPOINT`). NVIDIA host only (Vulkan): `docker-compose.nvidia.yml` passes `/dev/uinput` and the host's
+  `/dev/input`. No save states. libretro-thumbnails has no Switch folder: titles instead of covers.
 - PSX runs in the browser (EmulatorJS `psx`, pcsx_rearmed). EmulatorJS downloads one file, so the scan takes
   `.chd/.pbp/.bin`, never `.cue`/`.m3u`: multi-track games lose CD audio, multi-disc ones play disc 1.
 - `docker-compose.wsl.yml` is WSL2-only (GPU via Mesa d3d12 on `/dev/dxg`), loaded only where the unversioned `.env`

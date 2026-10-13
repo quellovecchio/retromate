@@ -20,6 +20,7 @@ export const CASES = {
   ngc: { mm: [135, 190, 14], kind: 'case', hue: 268, short: 'GC' }, // DVD keep case
   wii: { mm: [135, 190, 14], kind: 'case', white: true, hue: 60, short: 'Wii' }, // white DVD keep case
   ps3: { mm: [135, 170, 12], kind: 'case', hue: 214, short: 'PS3' }, // Blu-ray keep case
+  switch: { mm: [105, 170, 11], kind: 'case', hue: 25, short: 'NSW' }, // Switch game case
 };
 export const caseOf = (slug) => CASES[slug] ?? CASES.gba;
 const ratios = new Map(); // cover URL -> width/height, so a redrawn box (turntable, next visit) starts right

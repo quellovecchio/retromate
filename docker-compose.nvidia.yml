@@ -12,6 +12,13 @@ services:
       - CLOUD_GAME_ENCODER_VIDEO_CODEC=h264 # NVENC (stream/config.yaml); remove it to go back to software VP8
     volumes:
       - /tmp/.X11-unix:/tmp/.X11-unix
+      # Switch: Eden reads the controller from a virtual gamepad the bridge core creates through uinput. Its device node
+      # appears in the host's /dev/input, so the folder is shared (live) and input devices (char major 13) allowed.
+      - /dev/input:/dev/input
+    devices:
+      - /dev/uinput
+    device_cgroup_rules:
+      - "c 13:* rmw"
     # no Xvfb: wait for the host's Xorg (it may come up after Docker at boot)
     command: >-
       bash -c "./coordinator & while [ ! -S /tmp/.X11-unix/X0 ]; do sleep 0.5; done; ./worker"
