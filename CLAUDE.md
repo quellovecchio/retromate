@@ -75,11 +75,13 @@ the old process alive: restart the `api` server after editing `server.py`.
   `"browser"` loads EmulatorJS 4.2.3 from the CDN; `"stream"` loads `web/src/stream.js`.
 - ROMs are served at `/api/games/{id}/rom/{filename}`. The file name must stay the last URL segment: EmulatorJS
   caches ROMs in IndexedDB keyed by that segment plus size, so a constant suffix made same-size ROMs collide.
-- `web/src/nav.js` does spatial focus navigation by lines (left/right stay on the line, up/down go to the nearest
-  line; a `[data-row]` such as the cover flow or the tabs counts as one line and is entered on its current item;
+- `web/src/nav.js` does spatial focus navigation by lines (left/right stay on the line, and at its end wrap to the next
+  or previous item in the same parent, so a wrapping grid like the Libreria's consoles reads like text; up/down go to
+  the nearest line; a `[data-row]` such as the cover flow or the tabs counts as one line and is entered on its current item;
   a `[data-col]` is the other way round, for side-by-side lists whose lines don't align (the in-game options'
   categories and options): up/down stay inside it and stop at its end, left/right leave it even with nothing level
-  and land on the other column's current item;
+  and land on the other column's current item; each column scrolls on its own, and moving inside one scrolls only it
+  (`scrollIntoView` `container: 'nearest'`), never the panel around both;
   the sticky top bar takes focus only with the page scrolled to the top: up with nothing above scrolls there first),
   A/Enter clicks, B/Esc goes where `<html data-back>` says (set by app.js: back in history from a console page;
   Home from Libreria/Opzioni only if the Opzioni switch is on), X (or the X key) fires a `pad-x` event on the focused element (toggles a favorite

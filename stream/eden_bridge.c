@@ -13,6 +13,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <linux/uinput.h>
 #include <pthread.h>
 #include <signal.h>
@@ -504,12 +505,19 @@ bool retro_load_game(const struct retro_game_info *game) {
     snprintf(path, sizeof(path), "%s/user/config/qt-config.ini", eden_dir);
     write_controls(path);
 
+    // cloud-game's path is relative to the worker's directory, and Eden runs in eden_dir
+    char rom[PATH_MAX];
+    if (!realpath(game->path, rom)) {
+        say(RETRO_LOG_ERROR, "can't find %s: %s", game->path, strerror(errno));
+        return false;
+    }
+
     if (!x_open()) return false;
     pad_open(); // before Eden starts: SDL enumerates pads at boot
     audio_start();
     // AppImages normally mount themselves with FUSE, which containers lack: unpack instead (kept in /tmp afterwards,
     // so only the first start after a container restart waits for it)
-    char *argv[] = {appimage, "-f", "-g", (char *)game->path, NULL};
+    char *argv[] = {appimage, "-f", "-g", rom, NULL};
     char *extra[] = {"APPIMAGE_EXTRACT_AND_RUN=1", "NO_CLEANUP=1", "PULSE_SERVER=unix:" PULSE_SOCKET,
                      "SDL_JOYSTICK_DISABLE_UDEV=1", "QT_QPA_PLATFORM=xcb", NULL};
     eden_pid = spawn(argv, eden_dir, extra);
@@ -517,7 +525,7 @@ bool retro_load_game(const struct retro_game_info *game) {
         retro_unload_game();
         return false;
     }
-    say(RETRO_LOG_INFO, "started %s -f -g %s (pid %d)", appimage, game->path, eden_pid);
+    say(RETRO_LOG_INFO, "started %s -f -g %s (pid %d)", appimage, rom, eden_pid);
     return true;
 }
 

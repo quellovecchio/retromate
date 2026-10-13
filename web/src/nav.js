@@ -72,11 +72,18 @@ export function move(key) {
   if (near) cands = cands.filter((c) => overlap(c.e, near.e));
   const best = least(cands, (c) => c.along + 2 * c.side)?.el; // prefer aligned targets
   const into = best?.closest('[data-row], [data-col]');
-  const target = (into !== row && into !== col && into?.querySelector('[data-current], [aria-current]')) || best;
+  // A grid that wraps (the Libreria's consoles) reads like text: right from a line's last item goes on to the next
+  // line's first, left from its first back to the previous line's last, i.e. the next or previous item in the same
+  // parent (screen order is DOM order there). Nothing level on that side is what tells a line's end.
+  const wrap = !dy && !cands.length && items[items.indexOf(cur) + dx];
+  const target = (into !== row && into !== col && into?.querySelector('[data-current], [aria-current]')) || best
+    || (wrap?.parentElement === cur.parentElement && wrap);
   if (!target) return dy < 0 && !atTop && scrollTo({ top: 0, behavior });
-  // Focus alone jumps the page; glide it instead (scroll-margin still decides how much stays in view).
+  // Focus alone jumps the page; glide it instead (scroll-margin still decides how much stays in view). Inside a column
+  // only the column scrolls ('container', Chrome 140+): scrolling the panel around it dragged the other column along.
   target.focus({ preventScroll: true });
-  target.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior });
+  const container = target.closest('[data-col]') ? 'nearest' : 'all';
+  target.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior, container });
 }
 
 function tab(step) {

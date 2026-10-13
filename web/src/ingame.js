@@ -597,7 +597,7 @@ export function ingame(adapter, saved, { variant } = {}) {
               </button>`).join('')}</div>`}`;
           const opts = list.querySelectorAll('.ig-opt');
           (opts[focus] ?? opts[0])?.focus({ preventScroll: true });
-          opts[focus]?.scrollIntoView({ block: 'nearest' });
+          opts[focus]?.scrollIntoView({ block: 'nearest', container: 'nearest' }); // the list only, not the panel
         };
         const set = async (o, value) => {
           const was = o.value;
