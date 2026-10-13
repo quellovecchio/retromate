@@ -156,3 +156,12 @@ function poll(t) {
   requestAnimationFrame(poll);
 }
 requestAnimationFrame(poll);
+
+// On a phone in a browser tab (Chrome installs from a plain-HTTP origin only as a shortcut that opens in a tab), every
+// tap goes fullscreen until it is: no browser bars. A tap is needed, the browser refuses fullscreen without one, and
+// each page (index, play) asks again because fullscreen ends on navigation.
+if (matchMedia('(pointer: coarse) and (display-mode: browser)').matches) {
+  addEventListener('pointerdown', () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {});
+  });
+}

@@ -88,7 +88,8 @@ the old process alive: restart the `api` server after editing `server.py`.
   on games), LB/RB switch the header tabs. Opzioni can swap A and B (`getSwap`/`setSwap`, per device; glyphs marked
   `data-btn` relabel). The gamepad keyboard opens when a text field is clicked (mouse or confirm), not on focus. It covers every visible `a[href], button, input`. It acts only in the focused window (every tab sees the same pad), ignores
   buttons already down on load, and swaps confirm/back on Nintendo pads (vendor 057e). Components that need the raw
-  pad set `data-nav-lock` on `<html>`. The UI is a hash router in `web/src/app.js` rendering HTML strings; escape
+  pad set `data-nav-lock` on `<html>`. On a phone in a browser tab (a plain-HTTP origin installs only as a shortcut
+  that opens in Chrome) any tap requests fullscreen. The UI is a hash router in `web/src/app.js` rendering HTML strings; escape
   user/file-derived text with `esc()`. Routes: `#/options`, `#/`, `#/library`, `#/platform/{slug}`.
 - Design system "Vetrina": rules in `DESIGN.md`, tokens and components in `web/src/style.css`. Games are 3D boxes at
   their console's real packaging size (`CASES` in `app.js`) until the cover loads, then at the cover's ratio. Font pairings live in `web/src/fonts.js` (self-hosted,
