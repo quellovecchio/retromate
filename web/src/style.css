@@ -434,11 +434,15 @@ body.play { height: 100dvh; padding: 0; overflow: hidden; background: #000; }
 .msg { position: fixed; inset: 0; display: grid; place-items: center; margin: 0; color: var(--ink-2); font-weight: 700; }
 .toast { position: fixed; top: 1rem; left: 50%; translate: -50%; margin: 0; padding: 0.5rem 1rem; border-radius: 999px; background: #000c; color: var(--ink); font-size: 0.85rem; }
 
-/* ---------- Shader skins (skin.js, chosen in Opzioni: Aurora, Terminale, Prisma, Eco, Reticolo): the set becomes a
-   live shader in the focused hue. data-shader is on <html> only while it runs. Chrome turns to smoked glass with a lit
-   top edge, focus glows, and the focused console card is traced by a light that runs round its border. */
+/* ---------- Shader skins (skin.js, chosen in Opzioni): the set becomes a live WebGL2 backdrop. While it runs
+   <html data-chrome> lists the chrome to apply: "glass" (smoked glass with a lit top edge, glowing focus, a light
+   running round the focused console card), "light" (dark ink on a light page) and each skin's own extras.
+   Always keyed on data-chrome, never on data-skin alone: the Opzioni pills carry data-skin too. */
 @property --spin { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
-:root[data-shader] {
+.backdrop:has(canvas) { background: #090909; }
+.backdrop canvas { display: block; width: 100%; height: 100%; }
+
+:root[data-chrome~='glass'] {
   --surface: rgb(8 8 10 / 0.5);
   --surface-line: rgb(255 255 255 / 0.1);
   --panel: rgb(10 10 12 / 0.62);
@@ -447,26 +451,24 @@ body.play { height: 100dvh; padding: 0; overflow: hidden; background: #000; }
   --ring: 0 0 0 2px #090909, 0 0 0 4px #fff, 0 0 30px 6px oklch(0.78 0.15 var(--hue) / 0.5);
   background: #090909;
 }
-.backdrop:has(canvas) { background: #090909; }
-.backdrop canvas { display: block; width: 100%; height: 100%; }
-:root[data-shader] .top::before { background: rgb(9 9 9 / 0.5); }
-:root[data-shader] .page-title { background: linear-gradient(180deg, #fff 30%, rgb(255 255 255 / 0.55)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-/* Pills: smoked glass inside a lit gradient rim, like a button cut from the shader's card */
-:root[data-shader] :is(.nav a:not([aria-current]), .choice:not([aria-pressed='true']), .modal-close, .game-play-alt, .hints) {
+:root[data-chrome~='glass'] .top::before { background: rgb(9 9 9 / 0.5); }
+:root[data-chrome~='glass'] .page-title { background: linear-gradient(180deg, #fff 30%, rgb(255 255 255 / 0.55)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* Pills: smoked glass inside a lit gradient rim */
+:root[data-chrome~='glass'] :is(.nav a:not([aria-current]), .choice:not([aria-pressed='true']), .modal-close, .game-play-alt, .hints) {
   border: 1.5px solid transparent; background: linear-gradient(var(--glass), var(--glass)) padding-box, var(--edge) border-box;
 }
-:root[data-shader] .nav a[aria-current], :root[data-shader] .choice[aria-pressed='true'] { box-shadow: 0 0 24px oklch(0.8 0.14 var(--hue) / 0.45); }
-:root[data-shader] .nav a[aria-current]:focus, :root[data-shader] .choice[aria-pressed='true']:focus { box-shadow: var(--ring); }
+:root[data-chrome~='glass'] .nav a[aria-current], :root[data-chrome~='glass'] .choice[aria-pressed='true'] { box-shadow: 0 0 24px oklch(0.8 0.14 var(--hue) / 0.45); }
+:root[data-chrome~='glass'] .nav a[aria-current]:focus, :root[data-chrome~='glass'] .choice[aria-pressed='true']:focus { box-shadow: var(--ring); }
 /* Cards: smoked glass, a hairline and a lit top edge */
-:root[data-shader] :is(.console, .toggle, .font-pick, .state) { background: var(--surface); box-shadow: inset 0 0 0 1px var(--surface-line), inset 0 1px 0 rgb(255 255 255 / 0.14); }
-:root[data-shader] .panel { box-shadow: inset 0 0 0 1px var(--surface-line), inset 0 1px 0 rgb(255 255 255 / 0.18); }
-:root[data-shader] .modal-panel { background: rgb(10 10 12 / 0.9); box-shadow: inset 0 0 0 1px var(--surface-line), inset 0 1px 0 rgb(255 255 255 / 0.18), 0 30px 80px rgb(0 0 0 / 0.6); }
-:root[data-shader] .modal::backdrop { background: rgb(4 4 6 / 0.6); }
-:root[data-shader] :is(.toggle, .font-pick, .state):focus { box-shadow: var(--ring); }
-:root[data-shader] .font-pick[aria-pressed='true'] { background: rgb(255 255 255 / 0.12); box-shadow: inset 0 0 0 2px var(--go); }
-:root[data-shader] .font-pick[aria-pressed='true']:focus { box-shadow: inset 0 0 0 2px var(--go), var(--ring); }
-:root[data-shader] a.console:focus { background: oklch(0.2 0.04 var(--bh) / 0.55); box-shadow: 0 0 40px oklch(0.75 0.15 var(--bh) / 0.35), 0 0 0 2px #090909, 0 0 0 4px #fff; }
-:root[data-shader] a.console:focus::before {
+:root[data-chrome~='glass'] :is(.console, .toggle, .font-pick, .state) { background: var(--surface); box-shadow: inset 0 0 0 1px var(--surface-line), inset 0 1px 0 rgb(255 255 255 / 0.14); }
+:root[data-chrome~='glass'] .panel { box-shadow: inset 0 0 0 1px var(--surface-line), inset 0 1px 0 rgb(255 255 255 / 0.18); }
+:root[data-chrome~='glass'] .modal-panel { background: rgb(10 10 12 / 0.9); box-shadow: inset 0 0 0 1px var(--surface-line), inset 0 1px 0 rgb(255 255 255 / 0.18), 0 30px 80px rgb(0 0 0 / 0.6); }
+:root[data-chrome~='glass'] .modal::backdrop { background: rgb(4 4 6 / 0.6); }
+:root[data-chrome~='glass'] :is(.toggle, .font-pick, .state):focus { box-shadow: var(--ring); }
+:root[data-chrome~='glass'] .font-pick[aria-pressed='true'] { background: rgb(255 255 255 / 0.12); box-shadow: inset 0 0 0 2px var(--go); }
+:root[data-chrome~='glass'] .font-pick[aria-pressed='true']:focus { box-shadow: inset 0 0 0 2px var(--go), var(--ring); }
+:root[data-chrome~='glass'] a.console:focus { background: oklch(0.2 0.04 var(--bh) / 0.55); box-shadow: 0 0 40px oklch(0.75 0.15 var(--bh) / 0.35), 0 0 0 2px #090909, 0 0 0 4px #fff; }
+:root[data-chrome~='glass'] a.console:focus::before {
   content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 2px; pointer-events: none;
   background: conic-gradient(from var(--spin), transparent 0 55%, oklch(0.85 0.15 var(--bh)) 75%, #fff 80%, transparent 90%);
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
@@ -476,24 +478,188 @@ body.play { height: 100dvh; padding: 0; overflow: hidden; background: #000; }
 
 /* Reticolo: everything is drawn in lines. Cards and pills are hairline frames in the hue with square-ish corners,
    and the game boxes become wireframes: every face but the cover is an empty frame, seen through from behind. */
-:root[data-shader][data-skin='reticolo'] {
-  --wire: oklch(0.8 0.15 var(--hue));
+:root[data-chrome~='reticolo'] {
   --surface: rgb(4 4 8 / 0.6);
   --surface-line: oklch(0.8 0.15 var(--hue) / 0.5);
   --panel: rgb(4 4 8 / 0.7);
   --glass: rgb(4 4 8 / 0.75);
   --edge: linear-gradient(oklch(0.8 0.15 var(--hue) / 0.7), oklch(0.8 0.15 var(--hue) / 0.7));
 }
-:root[data-shader][data-skin='reticolo'] :is(.console, .panel, .toggle, .font-pick, .state, .modal-panel, .search, .nav a, .choice, .modal-close, .hints, .game-play, .game-play-alt, .retry) { border-radius: 4px; }
-:root[data-shader][data-skin='reticolo'] :is(.console, .toggle, .font-pick, .state, .panel, .search) { box-shadow: inset 0 0 0 1px var(--surface-line); }
-:root[data-shader][data-skin='reticolo'] .modal-panel { box-shadow: inset 0 0 0 1px var(--surface-line), 0 0 60px oklch(0.6 0.15 var(--hue) / 0.25); }
-:root[data-shader][data-skin='reticolo'] .top::before { background: rgb(4 4 8 / 0.6); box-shadow: inset 0 -1px 0 var(--surface-line); }
-:root[data-shader][data-skin='reticolo'] .box3d .f:not(.front) {
+:root[data-chrome~='reticolo'] :is(.console, .panel, .toggle, .font-pick, .state, .modal-panel, .search, .nav a, .choice, .modal-close, .hints, .game-play, .game-play-alt, .retry) { border-radius: 4px; }
+:root[data-chrome~='reticolo'] :is(.console, .toggle, .font-pick, .state, .panel, .search) { box-shadow: inset 0 0 0 1px var(--surface-line); }
+:root[data-chrome~='reticolo'] .modal-panel { box-shadow: inset 0 0 0 1px var(--surface-line), 0 0 60px oklch(0.6 0.15 var(--hue) / 0.25); }
+:root[data-chrome~='reticolo'] .top::before { background: rgb(4 4 8 / 0.6); box-shadow: inset 0 -1px 0 var(--surface-line); }
+:root[data-chrome~='reticolo'] .box3d .f:not(.front) {
   background: rgb(0 0 0 / 0.15); box-shadow: inset 0 0 0 1px oklch(0.82 0.15 var(--bh)); color: oklch(0.88 0.12 var(--bh));
   backface-visibility: visible;
 }
-:root[data-shader][data-skin='reticolo'] .box3d .front { outline: 1px solid oklch(0.82 0.15 var(--bh)); }
-:root[data-shader][data-skin='reticolo'] .fan-card { border-radius: 0; background: rgb(0 0 0 / 0.4); box-shadow: 0 0 0 1px oklch(0.82 0.15 var(--bh)); }
+:root[data-chrome~='reticolo'] .box3d .front { outline: 1px solid oklch(0.82 0.15 var(--bh)); }
+:root[data-chrome~='reticolo'] .fan-card { border-radius: 0; background: rgb(0 0 0 / 0.4); box-shadow: 0 0 0 1px oklch(0.82 0.15 var(--bh)); }
+
+/* CRT: the tube is on the backdrop; over the page, scanlines (fixed, never in the way of the pointer), colour
+   fringes on the text, and focus lands with a flash of phosphor. */
+:root[data-chrome~='crt'] body { text-shadow: -0.6px 0 rgb(255 40 90 / 0.45), 0.6px 0 rgb(40 220 255 / 0.45); }
+:root[data-chrome~='crt'] body::after {
+  content: ''; position: fixed; inset: 0; z-index: 20; pointer-events: none;
+  background: repeating-linear-gradient(180deg, transparent 0 2px, rgb(0 0 0 / 0.16) 2px 3px);
+}
+:root[data-chrome~='crt'] :is(.nav a, .choice, .console, .toggle, .font-pick, .state, .game-play, .modal-close):focus { animation: phosphor 450ms ease-out; }
+@keyframes phosphor { from { filter: brightness(2.2) blur(0.6px); } }
+
+/* 8-bit: square, solid chrome with stepped 4px pixel borders (notched corners); focus blinks between yellow and
+   white like a menu cursor; pixel-sharp covers and hard drop shadows on titles. */
+:root[data-chrome~='pixel'] {
+  --pb: rgb(255 255 255 / 0.4);
+  --surface: oklch(0.2 0.05 var(--hue) / 0.92);
+  --panel: oklch(0.17 0.05 var(--hue) / 0.94);
+}
+:root[data-chrome~='pixel'] :is(.nav a, .choice, .console, .panel, .toggle, .font-pick, .state, .search, .hints, .modal-panel, .modal-close, .game-play, .game-play-alt, .retry) {
+  border-radius: 0; box-shadow: 0 -4px 0 var(--pb), 0 4px 0 var(--pb), -4px 0 0 var(--pb), 4px 0 0 var(--pb);
+}
+:root[data-chrome~='pixel'] :is(.console, .toggle, .font-pick, .state, .nav a:not([aria-current]), .choice:not([aria-pressed='true']), .modal-close, .game-play-alt, .modal-panel) { background: var(--surface); }
+:root[data-chrome~='pixel'] .font-pick[aria-pressed='true'] { --pb: var(--go); }
+:root[data-chrome~='pixel'] :is(.nav a, .choice, .console, .toggle, .font-pick, .state, .modal-close, .game-play, .game-play-alt, .retry):focus,
+:root[data-chrome~='pixel'] .search:focus-within { --pb: var(--go); animation: px-blink 0.9s steps(1) infinite; }
+:root[data-chrome~='pixel'] .boxcard:focus { --pb: var(--go); border-radius: 0; box-shadow: inset 0 0 0 4px var(--pb); animation: px-blink 0.9s steps(1) infinite; }
+@keyframes px-blink { 50% { --pb: #fff; } }
+:root[data-chrome~='pixel'] .top::before { background: oklch(0.14 0.05 var(--hue) / 0.94); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: 0 4px 0 rgb(0 0 0 / 0.5); }
+:root[data-chrome~='pixel'] :is(.page-title, .console-short, .flow-title, .plat-title, .game-title, .showcase-title) { text-shadow: 4px 4px 0 rgb(0 0 0 / 0.55); }
+:root[data-chrome~='pixel'] :is(.cover img, .fan-card) { image-rendering: pixelated; border-radius: 0; }
+:root[data-chrome~='pixel'] :is(.toggle-track, .toggle-track::after) { border-radius: 0; }
+
+/* Light skins (Manuale, Game Boy): dark ink on a light page. Each sets --paper and --ink; every veil, line and
+   selected state is drawn from those two. */
+:root[data-chrome~='light'] {
+  color-scheme: light;
+  --ink-2: color-mix(in srgb, var(--ink) 72%, transparent);
+  --veil: color-mix(in srgb, var(--ink) 8%, transparent);
+  --veil-2: color-mix(in srgb, var(--ink) 16%, transparent);
+  --surface: var(--veil);
+  --surface-line: color-mix(in srgb, var(--ink) 24%, transparent);
+  --panel: color-mix(in srgb, var(--paper) 80%, transparent);
+  --ring: 0 0 0 3px var(--paper), 0 0 0 5px var(--ink);
+  background: var(--paper);
+}
+:root[data-chrome~='light'] .backdrop { background: var(--paper); }
+:root[data-chrome~='light'] .top::before { background: color-mix(in srgb, var(--paper) 82%, transparent); }
+:root[data-chrome~='light'] :is(.nav a, .choice, .font-pick, .toggle, .modal-close, .game-play-alt, .state, .badge) { background: var(--veil); }
+:root[data-chrome~='light'] :is(.nav a[aria-current], .choice[aria-pressed='true']) { background: var(--ink); color: var(--paper); }
+:root[data-chrome~='light'] .panel { box-shadow: inset 0 0 0 1px var(--surface-line); }
+:root[data-chrome~='light'] .font-pick[aria-pressed='true'] { background: var(--veil-2); box-shadow: inset 0 0 0 2px var(--ink); }
+:root[data-chrome~='light'] .font-pick[aria-pressed='true']:focus { box-shadow: inset 0 0 0 2px var(--ink), var(--ring); }
+:root[data-chrome~='light'] .font-pick-name i { color: var(--ink); }
+:root[data-chrome~='light'] .toggle-track { background: var(--veil-2); }
+:root[data-chrome~='light'] .toggle-track::after { background: var(--paper); box-shadow: 0 1px 2px rgb(0 0 0 / 0.3); }
+:root[data-chrome~='light'] .toggle[aria-checked='true'] .toggle-track { background: var(--ink); }
+:root[data-chrome~='light'] .toggle[aria-checked='true'] .toggle-track::after { background: var(--paper); }
+:root[data-chrome~='light'] .search { background: var(--veil); box-shadow: inset 0 0 0 1px var(--surface-line); }
+:root[data-chrome~='light'] .search input::placeholder { color: var(--ink-2); }
+:root[data-chrome~='light'] .search:focus-within { background: var(--veil-2); box-shadow: inset 0 0 0 2px var(--ink), 0 0 0 4px var(--paper), 0 0 0 6px var(--ink); }
+:root[data-chrome~='light'] .console { box-shadow: inset 0 0 0 1px var(--surface-line); }
+:root[data-chrome~='light'] .console-short { color: oklch(0.48 0.16 var(--bh)); }
+:root[data-chrome~='light'] a.console:focus { background: var(--veil-2); box-shadow: inset 0 0 0 1px var(--surface-line), var(--ring); }
+:root[data-chrome~='light'] .boxcard:focus { box-shadow: inset 0 0 0 3px var(--ink); }
+:root[data-chrome~='light'] .flow-item:focus[data-current] .box3d .front::before { box-shadow: 0 0 0 3px var(--ink), 0 18px 50px rgb(0 0 0 / 0.25); }
+:root[data-chrome~='light'] .flow::before { background: radial-gradient(closest-side, var(--veil-2), transparent); }
+:root[data-chrome~='light'] .empty { border-color: var(--surface-line); }
+:root[data-chrome~='light'] .modal::backdrop { background: color-mix(in srgb, var(--paper) 60%, transparent); }
+:root[data-chrome~='light'] .modal-panel { background: color-mix(in srgb, var(--paper) 96%, transparent); box-shadow: inset 0 0 0 1px var(--surface-line), 0 30px 80px rgb(0 0 0 / 0.25); }
+:root[data-chrome~='light'] .hints { background: color-mix(in srgb, var(--paper) 88%, transparent); box-shadow: inset 0 0 0 1px var(--surface-line); }
+:root[data-chrome~='light'] :is(.pad-btn-wide, .hints > span:not(:first-child) .pad-btn) { background: var(--ink); color: var(--paper); }
+
+/* Manuale: cream paper, warm black ink, and the one action colour turns manual-cover red. */
+:root[data-chrome~='manuale'] { --paper: #f3ecdc; --ink: #2a2420; --go: #d8342c; --ink-dark: #fff; }
+
+/* Game Boy: the whole page in the DMG's four greens. The hue is set aside; covers, spines and box faces go green. */
+:root[data-chrome~='gameboy'] { --paper: #9bbc0f; --ink: #0f380f; --go: #0f380f; --ink-dark: #9bbc0f; }
+:root[data-chrome~='gameboy'] :is(.console, .panel, .toggle, .font-pick, .state, .search, .modal-panel, .nav a, .choice, .modal-close, .hints, .game-play, .game-play-alt, .retry, .fan-card) { border-radius: 2px; }
+:root[data-chrome~='gameboy'] :is(.console-short, .cover-band) { color: var(--ink); }
+:root[data-chrome~='gameboy'] .cover-band { background: #8bac0f; }
+:root[data-chrome~='gameboy'] :is(.cover img, .state img) { filter: url(#skin-dmg); image-rendering: pixelated; }
+:root[data-chrome~='gameboy'] .box3d { --spine: #306230 !important; --spine-ink: #9bbc0f !important; }
+:root[data-chrome~='gameboy'] .box3d .front { background: #306230; color: #9bbc0f; }
+:root[data-chrome~='gameboy'] .box3d .f:not(.front) { background: #306230; }
+:root[data-chrome~='gameboy'] .box3d .top { background: #8bac0f; }
+:root[data-chrome~='gameboy'] .box3d .front::after { display: none; }
+:root[data-chrome~='gameboy'] .fan-card { background: #306230; box-shadow: none; }
+
+/* Onde: glossy chrome (a highlight on the top half), focus breathes an aura, boxes in a grid reflect on the floor. */
+:root[data-chrome~='onde'] :is(.console, .toggle, .font-pick, .state, .panel, .modal-panel) { background-image: linear-gradient(180deg, rgb(255 255 255 / 0.16), rgb(255 255 255 / 0.04) 48%, transparent 52%); }
+:root[data-chrome~='onde'] :is(.nav a:not([aria-current]), .choice:not([aria-pressed='true']), .modal-close, .game-play-alt, .hints) {
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.2), rgb(255 255 255 / 0.04) 50%, transparent 52%) padding-box, linear-gradient(var(--glass), var(--glass)) padding-box, var(--edge) border-box;
+}
+:root[data-chrome~='onde'] :is(.nav a, .choice, .console, .toggle, .font-pick, .state, .game-play, .modal-close, .boxcard):focus { animation: aura 1.8s ease-in-out infinite; }
+@keyframes aura { 50% { filter: drop-shadow(0 0 16px oklch(0.85 0.14 var(--hue) / 0.8)); } }
+:root[data-chrome~='onde'] .boxcard-stage { -webkit-box-reflect: below 0 linear-gradient(transparent 62%, rgb(255 255 255 / 0.3)); }
+
+/* Olografico: a rainbow foil laid over cards and covers (colour-dodge); focus slides it across, and the selected
+   box's foil keeps sweeping. */
+:root[data-chrome~='holo'] {
+  --foil: linear-gradient(115deg, transparent 15%, oklch(0.85 0.15 20) 30%, oklch(0.9 0.15 95) 40%, oklch(0.88 0.15 160) 50%, oklch(0.85 0.15 250) 60%, oklch(0.85 0.15 320) 70%, transparent 85%);
+}
+:root[data-chrome~='holo'] :is(.toggle, .font-pick, .state) { position: relative; }
+:root[data-chrome~='holo'] :is(.console, .toggle, .font-pick, .state)::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  background: var(--foil) 100% 0 / 250% 100%; mix-blend-mode: color-dodge; opacity: 0.18;
+  transition: background-position 900ms var(--ease), opacity 300ms ease;
+}
+:root[data-chrome~='holo'] :is(.console, .toggle, .font-pick, .state):focus::after { background-position: 0 0; opacity: 0.45; }
+:root[data-chrome~='holo'] .box3d .front::after { background: var(--foil) 100% 0 / 300% 100%; mix-blend-mode: color-dodge; opacity: 0.35; }
+:root[data-chrome~='holo'] :is(.boxcard:focus, .flow-item[data-current], .turntable, .modal-figure) .box3d .front::after { animation: foil 3s ease-in-out infinite alternate; }
+@keyframes foil { to { background-position: 0 0; } }
+
+/* Synthwave: chrome lettering for page titles and a magenta-to-cyan neon rim on the pills. */
+:root[data-chrome~='synth'] {
+  --edge: linear-gradient(90deg, #ff3fc8, #3fe0ff);
+  --ring: 0 0 0 2px #0b0014, 0 0 0 4px #fff, 0 0 30px 6px rgb(255 60 200 / 0.55);
+}
+:root[data-chrome~='synth'] .page-title {
+  background: linear-gradient(180deg, #e8f6ff 0%, #9fd4ff 45%, #2a1a4a 50%, #ff9ee6 62%, #fff 90%); -webkit-background-clip: text; background-clip: text;
+  color: transparent; font-style: italic; filter: drop-shadow(0 0 12px rgb(255 60 200 / 0.6));
+}
+:root[data-chrome~='synth'] .top::before { background: rgb(12 0 24 / 0.55); box-shadow: inset 0 -1px 0 rgb(255 60 200 / 0.5); }
+:root[data-chrome~='synth'] :is(.console, .panel) { box-shadow: inset 0 0 0 1px rgb(255 60 200 / 0.35), inset 0 1px 0 rgb(63 224 255 / 0.4); }
+
+/* Blueprint: a technical drawing. Chrome is dashed white line on blue with square corners, focus a solid frame;
+   boxes become dashed wireframes over a white-on-blue print of the cover, the showcase box with its size in mm. */
+:root[data-chrome~='blueprint'] {
+  --ink: #f2f7ff;
+  --ink-2: rgb(242 247 255 / 0.78);
+  --line: rgb(242 247 255 / 0.75);
+  --surface: rgb(8 40 100 / 0.4);
+  --panel: rgb(8 40 100 / 0.5);
+  --ring: 0 0 0 3px #0a2a66, 0 0 0 5px #fff;
+  background: #0a2a66;
+}
+:root[data-chrome~='blueprint'] :is(.console, .panel, .toggle, .font-pick, .state, .search, .modal-panel, .nav a, .choice, .modal-close, .hints, .game-play-alt) {
+  border-radius: 0; background: var(--surface); box-shadow: none; outline: 1px dashed var(--line); outline-offset: -1px;
+}
+:root[data-chrome~='blueprint'] :is(.console, .toggle, .font-pick, .state, .nav a, .choice, .modal-close, .game-play-alt, .game-play, .retry, .boxcard):focus,
+:root[data-chrome~='blueprint'] .search:focus-within { box-shadow: var(--ring); outline-style: solid; border-radius: 0; }
+:root[data-chrome~='blueprint'] :is(.nav a[aria-current], .choice[aria-pressed='true']) { background: #f2f7ff; color: #0a2a66; outline-style: solid; }
+:root[data-chrome~='blueprint'] .font-pick[aria-pressed='true'] { outline: 2px solid var(--go); }
+:root[data-chrome~='blueprint'] :is(.game-play, .retry) { border-radius: 0; }
+:root[data-chrome~='blueprint'] .top::before { background: rgb(10 42 102 / 0.75); -webkit-backdrop-filter: none; backdrop-filter: none; border-bottom: 1px dashed var(--line); }
+:root[data-chrome~='blueprint'] .console-short { color: #fff; }
+:root[data-chrome~='blueprint'] .box3d .f:not(.front) { background: rgb(10 42 102 / 0.25); outline: 1px dashed var(--line); outline-offset: -1px; color: var(--ink); backface-visibility: visible; }
+:root[data-chrome~='blueprint'] .box3d .front { outline: 1px solid var(--line); }
+:root[data-chrome~='blueprint'] .box3d .front::after { display: none; }
+:root[data-chrome~='blueprint'] .box3d .cover img { filter: url(#skin-blueprint); }
+:root[data-chrome~='blueprint'] .cover-band { background: rgb(242 247 255 / 0.15); }
+:root[data-chrome~='blueprint'] :is(.turntable, .modal-figure) .box3d::after {
+  content: attr(data-mm) ' mm'; position: absolute; left: 0; right: 0; top: calc(100% + 10px); transform: translateZ(calc(var(--dz) / 2));
+  text-align: center; font: 600 12px ui-monospace, Consolas, monospace; color: var(--ink-2); border-top: 1px solid var(--line); padding-top: 4px;
+}
+:root[data-chrome~='blueprint'] .fan-card { border-radius: 0; background: rgb(10 42 102 / 0.8); outline: 1px dashed var(--line); }
+:root[data-chrome~='blueprint'] .fan-card img { filter: url(#skin-blueprint); }
+
+/* Neon: titles glow like tubes, cards carry a neon rim, and focus switches an element on with a flicker. */
+:root[data-chrome~='neon'] { --neon: oklch(0.82 0.17 var(--hue)); --ring: 0 0 0 2px #050308, 0 0 0 4px #fff, 0 0 26px 8px oklch(0.75 0.2 var(--hue) / 0.6); }
+:root[data-chrome~='neon'] :is(.page-title, .plat-title, .flow-title, .game-title) { background: none; color: #fff; text-shadow: 0 0 6px #fff, 0 0 18px var(--neon), 0 0 42px var(--neon); }
+:root[data-chrome~='neon'] .console-short { text-shadow: 0 0 14px oklch(0.75 0.2 var(--bh)); }
+:root[data-chrome~='neon'] :is(.console, .toggle, .font-pick, .state, .panel) { box-shadow: inset 0 0 0 1.5px oklch(0.8 0.15 var(--hue) / 0.55), inset 0 0 18px oklch(0.7 0.2 var(--hue) / 0.18); }
+:root[data-chrome~='neon'] :is(.nav a, .choice, .console, .toggle, .font-pick, .state, .game-play, .modal-close, .boxcard):focus { animation: neon-on 700ms linear; }
+@keyframes neon-on { 0%, 12%, 24%, 40% { opacity: 1; } 6%, 18%, 32% { opacity: 0.35; } }
 
 /* ---------- Reduced motion: no flying, swaying or springing; state changes stay instant and visible */
 @media (prefers-reduced-motion: reduce) {

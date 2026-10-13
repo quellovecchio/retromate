@@ -54,7 +54,7 @@ export const cover = (g, lazy = true, band = false) => `
 export const box = (g, { lazy = true, lite = false } = {}) => {
   const [spine, ink] = spineColor(g);
   return `
-  <span class="box3d" data-kind="${caseOf(g.platform).kind}"${caseOf(g.platform).white ? ' data-white' : ''} style="${shape(g)};--bh:${caseOf(g.platform).hue};--spine:${spine};--spine-ink:${ink}" aria-hidden="true">
+  <span class="box3d" data-mm="${caseOf(g.platform).mm.join('×')}" data-kind="${caseOf(g.platform).kind}"${caseOf(g.platform).white ? ' data-white' : ''} style="${shape(g)};--bh:${caseOf(g.platform).hue};--spine:${spine};--spine-ink:${ink}" aria-hidden="true">
     <span class="f front">${cover(g, lazy, true)}</span>
     <span class="f spine"><span>${esc(g.title)}</span></span>
     <span class="f top"></span>

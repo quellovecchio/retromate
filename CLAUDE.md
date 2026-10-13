@@ -90,11 +90,12 @@ the old process alive: restart the `api` server after editing `server.py`.
   user/file-derived text with `esc()`. Routes: `#/options`, `#/`, `#/library`, `#/platform/{slug}`.
 - Design system "Vetrina": rules in `DESIGN.md`, tokens and components in `web/src/style.css`. Games are 3D boxes at
   their console's real packaging size (`CASES` in `app.js`) until the cover loads, then at the cover's ratio. Font pairings live in `web/src/fonts.js` (self-hosted,
-  chosen in Opzioni, per device). Skins too (`web/src/skin.js`, per device): `vetrina` is the CSS set; the others
-  (Aurora, Terminale, Prisma, Eco: OpenShaders ribbons with their authors' constants and a grain/ASCII/plain post pass;
-  Reticolo: our wireframe grids and cubes) draw the backdrop in WebGL2, tinted by `--hue`, and set `data-shader` on
-  `<html>` while it runs, which switches the dark-glass chrome; Reticolo adds wireframe boxes. Never style on
-  `[data-skin]` alone: the Opzioni pills carry it too. `web/src/padtype.js` is the gamepad keyboard that opens on text fields.
+  chosen in Opzioni, per device). Skins too (`web/src/skin.js`, per device): `vetrina` is the CSS set; every other
+  skin draws the backdrop in WebGL2 (a field shader into a texture at `scale`, then a post pass: grain, ASCII, CRT,
+  Game Boy dithering or a copy), tinted by `--hue` (`uFocus` gives the focused element's position). While it runs,
+  `<html data-chrome>` lists the CSS to apply (`glass`, `light` for the two light skins, plus each skin's own); without
+  WebGL2 nothing is set and the page stays Vetrina. Never style on `[data-skin]` alone: the Opzioni pills carry it too.
+  Cover duotones (Game Boy, Blueprint) are SVG filters skin.js injects; `box()` writes `data-mm` for Blueprint. `web/src/padtype.js` is the gamepad keyboard that opens on text fields.
 - Dev only: `?data=worst|one|empty|huge` (e.g. `http://localhost:5173/?data=worst#/`) swaps the API data for the
   stress fixtures in `web/src/dev/fixtures.js`; they never ship in the build.
 - `web/src/stream.js` is a minimal client for cloud-game's coordinator protocol: WebSocket JSON envelopes

@@ -318,7 +318,20 @@ A 360px disc in the dark set hue with a 10px solid rim shadow and a deep drop, h
 A hinged sign that drops from the top edge: Action Yellow with Ink Dark bold text, square top corners and 16px bottom corners, the same 6px Yellow Edge ledge as the retry button, max 560px. It swings down from rotateX(-90deg) on the spring and swings back up in 200ms after 4.5 s. Used when an action cannot happen here and now, such as a streamed game whose single server slot is busy.
 
 ### Shader skins
-Alternative looks chosen in Opzioni (per device, `skin.js`): a live WebGL2 backdrop on #090909 replaces the set, tinted from `--hue` (eased round the colour wheel in the shader, so the 800ms backdrop rule still holds). Aurora, Terminale, Prisma and Eco are folded ribbons of light (OpenShaders: @elsoghiar, @dolza, @isuru, @voidy): Aurora with film grain, Terminale and Eco redrawn in ASCII glyphs (Eco's ribbons trail an echo), Prisma clean across half the spectrum. Reticolo is a wireframe world: grid floor and ceiling scrolling towards the viewer, a horizon glow, two nested cubes turning on the right. With any of them chrome turns to smoked glass: pills inside a lit gradient rim, cards with a hairline and a lit top edge, the current tab and chosen pill glowing in the hue; focus adds a hue glow outside the white ring and a light runs round the focused console card's border (3s per lap). Page titles fade from white downwards. Reticolo draws chrome as hue hairline frames with 4px corners and turns game boxes into wireframes (every face but the cover an empty frame, seen through from behind). Without WebGL2 the page keeps Vetrina; under reduced motion the backdrop holds still.
+Alternative looks chosen in Opzioni (per device, `skin.js`): a live WebGL2 backdrop replaces the set, tinted from `--hue` (eased round the colour wheel in the shader) except where the palette is the point. Without WebGL2 the page keeps Vetrina; under reduced motion the backdrop holds still.
+- **Glass chrome** (most dark skins): smoked glass pills inside a lit gradient rim, cards with a hairline and a lit top edge, focus with a hue glow outside the white ring, a light running round the focused console card, page titles fading from white.
+- **Aurora, Terminale, Prisma, Eco**: OpenShaders' folded light ribbons (@elsoghiar, @dolza, @isuru, @voidy): with film grain, in ASCII glyphs, clean across half the spectrum, in ASCII with an echo.
+- **Reticolo**: wireframe grids and turning cubes; hairline chrome with 4px corners; boxes as see-through wireframes.
+- **CRT**: a tube TV (curved glass, scanlines, RGB mask, roll bar, flicker); scanlines and colour fringes over the page too; focus lands with a phosphor flash.
+- **8-bit**: a pixel-art landscape in parallax; square chrome with stepped pixel borders; focus blinks yellow/white; pixel-sharp covers.
+- **Game Boy** (light): the DMG's four greens with ordered dithering, page and covers included; the hue is set aside.
+- **Onde**: 2000s dashboard waves; glossy chrome, a breathing aura on focus, boxes reflected on the floor.
+- **Olografico**: bokeh and a rainbow sheen; a colour-dodge foil over cards and covers that slides on focus.
+- **Synthwave**: its own palette: striped sun, neon mountains, racing grid; chrome page titles, magenta-cyan rims.
+- **Blueprint**: drafting paper with a construction drawing; dashed square chrome; boxes as dashed wireframes over white-on-blue covers, the showcase box labelled with its real size in mm.
+- **Neon**: an arcade at night (smoke, flickering tubes); glowing titles, neon rims, focus switches on with a flicker.
+- **Manuale** (light): a 90s booklet: paper, warm ink, out-of-register halftone; the action colour turns red.
+- **Notte stellata**: twinkling star layers and a milky way, shifting towards the focused element. The lightest.
 
 ## Do's and Don'ts
 
