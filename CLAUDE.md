@@ -166,7 +166,9 @@ the old process alive: restart the `api` server after editing `server.py`.
   GameCube pad (`hid: 0: [1]`). Same User folder, so its memory cards sit beside the Wii NAND; `dolphin_language`
   from Opzioni sets its language too (PAL games).
 - Switch has no libretro core: `stream/eden_bridge.c` is one that emulates nothing. It starts Eden (the user's
-  AppImage, unpacked with `APPIMAGE_EXTRACT_AND_RUN`: no FUSE in containers) fullscreen on the worker's X display and
+  AppImage, unpacked with `APPIMAGE_EXTRACT_AND_RUN`: no FUSE in containers, game path made absolute: Eden runs in its
+  own folder) fullscreen on the worker's X display (no window manager there: `x_fit()` sizes the windows of Eden's
+  session to the screen) and
   hands cloud-game the X screen every `retro_run` (XRGB8888 via MIT-SHM with a memfd, SHM 1.2, so no shared IPC
   namespace), the sound of a private PulseAudio whose null sink is Eden's output (its monitor recorded on a thread),
   and RetroPad port 0 as a uinput gamepad (Xbox 360 ids, D-pad as a hat). Eden reads that pad through SDL from the

@@ -122,6 +122,7 @@ static uint8_t *frame;
 static size_t frame_size;
 static xcb_shm_seg_t seg;
 static int shm;
+static xcb_atom_t net_wm_pid;
 
 static int x_open(void) {
     int num;
@@ -136,6 +137,9 @@ static int x_open(void) {
     scr_w = it.data->width_in_pixels;
     scr_h = it.data->height_in_pixels;
     frame_size = (size_t)scr_w * scr_h * 4;
+    xcb_intern_atom_reply_t *a = xcb_intern_atom_reply(xc, xcb_intern_atom(xc, 0, 11, "_NET_WM_PID"), NULL);
+    net_wm_pid = a ? a->atom : XCB_NONE;
+    free(a);
 
     xcb_shm_query_version_reply_t *v = xcb_shm_query_version_reply(xc, xcb_shm_query_version(xc), NULL);
     int fd_ok = v && (v->major_version > 1 || v->minor_version >= 2); // SHM 1.2: segments passed as file descriptors
@@ -174,6 +178,35 @@ static int x_grab(void) {
     memcpy(frame, xcb_get_image_data(r), len < frame_size ? len : frame_size);
     free(r);
     return 1;
+}
+
+// There's no window manager on the worker's display, so Eden's -f hides its menus but can't make the window
+// fullscreen: we move and size its windows (its process tree is Eden's session, spawn() makes one) to the screen.
+static void x_fit(void) {
+    xcb_query_tree_reply_t *t = xcb_query_tree_reply(xc, xcb_query_tree(xc, root), NULL);
+    if (!t) return;
+    xcb_window_t *w = xcb_query_tree_children(t);
+    for (int i = 0, n = xcb_query_tree_children_length(t); i < n; i++) {
+        xcb_get_window_attributes_reply_t *a =
+            xcb_get_window_attributes_reply(xc, xcb_get_window_attributes(xc, w[i]), NULL);
+        int ok = a && a->map_state == XCB_MAP_STATE_VIEWABLE && !a->override_redirect; // not menus or tooltips
+        free(a);
+        if (!ok) continue;
+        xcb_get_property_reply_t *p =
+            xcb_get_property_reply(xc, xcb_get_property(xc, 0, w[i], net_wm_pid, XCB_ATOM_CARDINAL, 0, 1), NULL);
+        ok = p && xcb_get_property_value_length(p) == 4 && getsid(*(uint32_t *)xcb_get_property_value(p)) == eden_pid;
+        free(p);
+        if (!ok) continue;
+        xcb_get_geometry_reply_t *g = xcb_get_geometry_reply(xc, xcb_get_geometry(xc, w[i]), NULL);
+        if (g && (g->x || g->y || g->width != scr_w || g->height != scr_h)) {
+            uint32_t v[] = {0, 0, scr_w, scr_h};
+            xcb_configure_window(
+                xc, w[i], XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_WIDTH | XCB_CONFIG_WINDOW_HEIGHT, v);
+            xcb_flush(xc);
+        }
+        free(g);
+    }
+    free(t);
 }
 
 static void x_close(void) {
@@ -530,8 +563,10 @@ bool retro_load_game(const struct retro_game_info *game) {
 }
 
 void retro_run(void) {
+    static unsigned frames;
     poll_cb();
     pad_update();
+    if (eden_pid && frames++ % (FPS / 2) == 0) x_fit(); // Eden opens new windows (dialogs, the game's) as it goes
     video_cb(x_grab() ? frame : NULL, scr_w, scr_h, scr_w * 4); // NULL: the last frame again
     audio_push();
     int status;
