@@ -317,6 +317,9 @@ A 360px disc in the dark set hue with a 10px solid rim shadow and a deep drop, h
 ### Notice
 A hinged sign that drops from the top edge: Action Yellow with Ink Dark bold text, square top corners and 16px bottom corners, the same 6px Yellow Edge ledge as the retry button, max 560px. It swings down from rotateX(-90deg) on the spring and swings back up in 200ms after 4.5 s. Used when an action cannot happen here and now, such as a streamed game whose single server slot is busy.
 
+### Skin "Aurora"
+An alternative look chosen in Opzioni (per device, `skin.js`). The set becomes a live shader on #090909: ribbons of light folded through 73 layers, breathing slowly, with animated film grain, tinted from `--hue` (eased round the colour wheel in the shader, so the 800ms backdrop rule still holds). Chrome turns to smoked glass: pills inside a lit gradient rim, cards with a hairline and a lit top edge, the current tab and chosen pill glowing in the hue. Focus adds a hue glow outside the white ring, and a focused console card is traced by a light that runs round its border (3s per lap). Page titles fade from white downwards. Without WebGL2 the set's gradients stay; under reduced motion the light holds still.
+
 ## Do's and Don'ts
 
 ### Do:

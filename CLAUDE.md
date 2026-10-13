@@ -90,7 +90,9 @@ the old process alive: restart the `api` server after editing `server.py`.
   user/file-derived text with `esc()`. Routes: `#/options`, `#/`, `#/library`, `#/platform/{slug}`.
 - Design system "Vetrina": rules in `DESIGN.md`, tokens and components in `web/src/style.css`. Games are 3D boxes at
   their console's real packaging size (`CASES` in `app.js`) until the cover loads, then at the cover's ratio. Font pairings live in `web/src/fonts.js` (self-hosted,
-  chosen in Opzioni, per device). `web/src/padtype.js` is the gamepad keyboard that opens on text fields.
+  chosen in Opzioni, per device). Skins too (`web/src/skin.js`, per device): `vetrina` is the CSS set, `aurora`
+  draws the backdrop with a WebGL2 shader (folded light + film grain, tinted by `--hue`, ribbons at half resolution) and
+  restyles chrome under `:root[data-skin='aurora']` (always `:root`: the Opzioni pills carry `data-skin` too). `web/src/padtype.js` is the gamepad keyboard that opens on text fields.
 - Dev only: `?data=worst|one|empty|huge` (e.g. `http://localhost:5173/?data=worst#/`) swaps the API data for the
   stress fixtures in `web/src/dev/fixtures.js`; they never ship in the build.
 - `web/src/stream.js` is a minimal client for cloud-game's coordinator protocol: WebSocket JSON envelopes

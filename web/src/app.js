@@ -3,6 +3,7 @@
 import '@phosphor-icons/web/regular';
 import { MENU_STYLES, box, caseOf, cover, esc, getMenuStyle, playtimeText, setMenuStyle, stamp } from './box.js';
 import { FONTS, getFonts, setFonts } from './fonts.js';
+import { SKINS, getSkin, setSkin } from './skin.js';
 import './style.css';
 import { getSwap, setSwap } from './nav.js';
 import './padtype.js';
@@ -351,6 +352,14 @@ function options() {
   <section aria-labelledby="opt-title">
     <h1 id="opt-title" class="page-title">Opzioni</h1>
     <div class="panel">
+      <h2>Aspetto</h2>
+      <p class="panel-note">La scelta vale per questo dispositivo.</p>
+      <div class="choices" data-choices="skin" role="group" aria-label="Aspetto">${SKINS.map(([id, name]) => `
+        <button class="choice" data-skin="${id}" aria-pressed="false">${name}</button>`).join('')}
+      </div>
+      <p class="panel-note" data-skin-note></p>
+    </div>
+    <div class="panel">
       <h2>Caratteri</h2>
       <p class="panel-note">La scelta vale per questo dispositivo.</p>
       <div class="font-picks">${FONTS.map(([id, name]) => `
@@ -428,6 +437,20 @@ function options() {
       if (b) { setMenuStyle(b.dataset.menu); markMenu(); }
     });
     markMenu();
+    const skins = [...scene.querySelectorAll('.choice[data-skin]')];
+    const markSkin = () => {
+      skins.forEach((b) => b.setAttribute('aria-pressed', b.dataset.skin === getSkin()));
+      scene.querySelector('[data-skin-note]').textContent = SKINS.find(([id]) => id === getSkin())[2];
+    };
+    scene.querySelector('[data-choices="skin"]').addEventListener('click', (e) => {
+      const b = e.target.closest('.choice');
+      if (!b) return;
+      const apply = () => { setSkin(b.dataset.skin); markSkin(); };
+      if (!document.startViewTransition || reduce() || document.hidden) return apply();
+      root.dataset.vt = 'fade';
+      document.startViewTransition(apply).ready.catch(() => {});
+    });
+    markSkin();
     const picks = [...scene.querySelectorAll('.font-pick')];
     const mark = () => picks.forEach((b) => b.setAttribute('aria-pressed', b.dataset.fonts === getFonts()));
     scene.querySelector('.font-picks').addEventListener('click', (e) => {
