@@ -167,8 +167,14 @@ export function ingame(adapter, saved, { variant } = {}) {
   const stage = $('.ig-stage');
   const dash = [...dlg.querySelectorAll('.ig-bar, .ig-top, .ig-shelf, .ig-game, .ig-volume, .ig-players')];
   // What this emulator can't do (see the adapter contract)
-  const missing = [['options', !adapter.options], ['hold', !adapter.pause], ['save', !adapter.saveState], ['load', !adapter.saveState]];
+  const missing = [['options', !adapter.options], ['hold', !adapter.pause]];
   for (const [name, off] of missing) if (off) $(`[data-cmd="${name}"]`).disabled = true;
+  // No save states (PS3, Switch): both commands go, and in the bar the separator before them.
+  if (!adapter.saveState) {
+    const save = $('[data-cmd="save"]');
+    if (save.previousElementSibling?.matches('.ig-sep')) save.previousElementSibling.hidden = true;
+    save.hidden = $('[data-cmd="load"]').hidden = true;
+  }
   // Vetrina: the box turns to face the shelf where focus is (its spine shows on the other side).
   if (vetrina) dlg.addEventListener('focusin', (e) => {
     const side = e.target.closest('.ig-shelf');

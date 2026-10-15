@@ -151,7 +151,9 @@ the old process alive: restart the `api` server after editing `server.py`.
   RSX thread. An image format `vk_readback` doesn't convert is logged once as `vulkan: frame format N`. Firmware
   `library/bios/ps3/PS3UPDAT.PUP`, installed on the first start; its system folder (dev_flash, dev_hdd0 with the game
   saves, caches) is `library/saves/ps3/rpcs3`. `.iso` only: folder dumps are all named `PS3_DISC.SFB`, and cloud-game
-  tells games apart by file stem. No save states (RPCS3 can't serialize). It links libOpenGL, libvulkan and libasound,
+  tells games apart by file stem. No save states: `states=False` in `PLATFORMS` (Switch too) hides them in the in-game
+  menu and disables Select+R; asked for one, RPCS3 stopped every thread and, with the game paused in the menu, its RSX
+  thread never stopped: the worker hung and kept the slot. It links libOpenGL, libvulkan and libasound,
   which the image only has because `stream/Dockerfile` installs them: a new core's missing library shows up as
   `couldn't load the lib: ...` in the worker log, so check its DT_NEEDED first.
 - PS2 memory cards (`Mcd001.ps2`, `Mcd002.ps2`, shared by every game) are in `library/saves/ps2/memcards`, mounted on
@@ -193,7 +195,10 @@ the old process alive: restart the `api` server after editing `server.py`.
   (`nanoarch/vulkan.c`, `vk.h`, `vulkan.go`, vendored `libretro_vulkan.h`): headless instance and device (through the
   core's context negotiation interface when it has one; discrete GPU first, a CPU device like lavapipe only with
   `RETROMATE_VULKAN_CPU` set), `GET_HW_RENDER_INTERFACE`, and each `set_image` copied into host memory as XRGB8888
-  in `video_refresh` (one frame in flight, so sync index 0). Offered only to cores with the `vulkan` hack in
+  in `video_refresh` (one frame in flight, so sync index 0). A refresh with no `set_image` since the last one repeats
+  the frame: it is not sent (its signal semaphore is still signalled), and with `vfr` a frame lasts from its
+  `set_image` to the next one's. RPCS3 refreshes at 59.94 Hz for its 30 fps: every frame went out twice, and with its
+  frames landing unevenly on the ticks, some once and some three times (judder at a steady 30 in its overlay). Offered only to cores with the `vulkan` hack in
   `stream/config.yaml` and only where `vk_available()` finds a GPU: `GET_PREFERRED_HW_RENDER` then answers Vulkan
   (OpenGL core otherwise, e.g. WSL2, which has no Vulkan driver in the container), and any other Vulkan
   `SET_HW_RENDER` is refused (accepted, it used to fall into the GL path and crash with BadMatch). PS2 has the hack,

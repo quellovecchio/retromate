@@ -91,7 +91,9 @@ if (!res.ok) {
     const saved = await savedControls(game.platform, streamDefaultControls());
     if (saved) ctl.controls = saved;
     const adapter = streamAdapter(game, ctl, streamDefaultControls, options, DEVICE_KEY);
-    combos.saveState = async () => toast((await adapter.saveState()) ? 'Stato salvato.' : 'Salvataggio non riuscito.');
+    // No save states where the core can't make them (PS3, Switch): the menu hides them and Select + R does nothing.
+    if (!game.states) for (const k of ['saveState', 'states', 'loadState']) delete adapter[k];
+    else combos.saveState = async () => toast((await adapter.saveState()) ? 'Stato salvato.' : 'Salvataggio non riuscito.');
     menu = ingame(adapter, saved, { variant: params.get('menu') ?? getMenuStyle() });
   }
 }

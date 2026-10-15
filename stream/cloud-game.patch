@@ -1088,7 +1088,7 @@ index 669862d..34d3e31 100644
  
          case RETRO_DEVICE_ANALOG:
 diff --git a/pkg/worker/caged/libretro/nanoarch/nanoarch.go b/pkg/worker/caged/libretro/nanoarch/nanoarch.go
-index a451aeb..d0d72d5 100644
+index a451aeb..b04c1c9 100644
 --- a/pkg/worker/caged/libretro/nanoarch/nanoarch.go
 +++ b/pkg/worker/caged/libretro/nanoarch/nanoarch.go
 @@ -7,6 +7,7 @@ import (
@@ -1301,12 +1301,22 @@ index a451aeb..d0d72d5 100644
  	Nan0.audioBuffCb = nil
  	n.freeCStrings()
  }
-@@ -696,6 +794,13 @@ func coreVideoRefresh(data unsafe.Pointer, width, height uint, packed uint) {
+@@ -696,6 +794,23 @@ func coreVideoRefresh(data unsafe.Pointer, width, height uint, packed uint) {
  	if data != C.RETRO_HW_FRAME_BUFFER_VALID {
  		//noinspection GoRedundantConversion
  		data_ = unsafe.Slice((*byte)(data), bytes)
 +	} else if Nan0.Video.vk {
-+		// RetroMate: the image the core handed over with set_image, copied into host memory as XRGB8888
++		// RetroMate: the image the core handed over with set_image, copied into host memory as XRGB8888.
++		// A refresh with no set_image since the last one repeats the frame (libretro_vulkan.h): RPCS3 does that at
++		// 59.94 Hz for its 30 fps, so every frame went out twice and, with RPCS3's frames landing unevenly on the
++		// ticks, some once and some three times. Not sent; a frame lasts from its set_image to the next one's.
++		d, fresh := vulkanNewFrame()
++		if !fresh {
++			return
++		}
++		if Nan0.vfr && d > 0 {
++			dt = d
++		}
 +		if data_ = vulkanReadback(width, height); data_ == nil {
 +			Nan0.Handlers.OnDup()
 +			return
@@ -1315,7 +1325,7 @@ index a451aeb..d0d72d5 100644
  	} else {
  		// if Libretro renders frame with OpenGL context
  		data_ = graphics.ReadFramebuffer(bytes, width, height)
-@@ -830,6 +935,32 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
+@@ -830,6 +945,32 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
  			return true
  		}
  		return false
@@ -1348,7 +1358,7 @@ index a451aeb..d0d72d5 100644
  	case C.RETRO_ENVIRONMENT_GET_VARIABLE:
  		if Nan0.options == nil {
  			return false
-@@ -850,6 +981,16 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
+@@ -850,6 +991,16 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
  		}
  		return false
  	case C.RETRO_ENVIRONMENT_SET_HW_RENDER:
@@ -1365,7 +1375,7 @@ index a451aeb..d0d72d5 100644
  		if Nan0.Video.gl.enabled {
  			Nan0.Video.hw = (*C.struct_retro_hw_render_callback)(data)
  			Nan0.Video.hw.get_current_framebuffer = (C.retro_hw_get_current_framebuffer_t)(C.core_get_current_framebuffer_cgo)
-@@ -857,29 +998,48 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
+@@ -857,29 +1008,48 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
  			return true
  		}
  		return false
@@ -1620,16 +1630,17 @@ index 0000000..f5f4fb5
 +}
 diff --git a/pkg/worker/caged/libretro/nanoarch/vk.h b/pkg/worker/caged/libretro/nanoarch/vk.h
 new file mode 100644
-index 0000000..03cdaaf
+index 0000000..cc5fcf9
 --- /dev/null
 +++ b/pkg/worker/caged/libretro/nanoarch/vk.h
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,25 @@
 +#ifndef RETROMATE_VK_H
 +#define RETROMATE_VK_H
 +
 +// RetroMate: libretro's Vulkan frontend side (vulkan.c), for cores whose config lists the "vulkan" hack.
 +
 +#include <stdbool.h>
++#include <stdint.h>
 +
 +// Whether a Vulkan GPU is there (cached). Software devices (lavapipe) only with RETROMATE_VULKAN_CPU set.
 +bool vk_available(void);
@@ -1640,6 +1651,9 @@ index 0000000..03cdaaf
 +// struct retro_hw_render_interface_vulkan * for GET_HW_RENDER_INTERFACE, NULL before vk_create.
 +const void *vk_interface(void);
 +const char *vk_device_name(void);
++// -1 if the core called no set_image since the last call (a refresh without one repeats the frame), else the ns
++// between this frame's set_image and the previous one's (0 for the first).
++int64_t vk_new_frame(void);
 +// The image the core last handed over, copied into host memory as XRGB8888 rows of w * 4 bytes. NULL on failure.
 +void *vk_readback(unsigned w, unsigned h);
 +void vk_destroy(void);
@@ -1647,10 +1661,10 @@ index 0000000..03cdaaf
 +#endif
 diff --git a/pkg/worker/caged/libretro/nanoarch/vulkan.c b/pkg/worker/caged/libretro/nanoarch/vulkan.c
 new file mode 100644
-index 0000000..adcfee8
+index 0000000..78d9078
 --- /dev/null
 +++ b/pkg/worker/caged/libretro/nanoarch/vulkan.c
-@@ -0,0 +1,440 @@
+@@ -0,0 +1,467 @@
 +// RetroMate: the frontend side of libretro's Vulkan rendering, which cloud-game lacked (it only hosted OpenGL).
 +// Headless: no surface, no swapchain. The core renders on our device (created through its context negotiation
 +// interface when it has one, so it gets the extensions and features it needs) and hands each frame over with
@@ -1662,6 +1676,7 @@ index 0000000..adcfee8
 +#include <stdint.h>
 +#include <stdlib.h>
 +#include <string.h>
++#include <time.h>
 +
 +#include "libretro_vulkan.h"
 +#include "vk.h"
@@ -1689,6 +1704,9 @@ index 0000000..adcfee8
 +    uint32_t num_cmd;
 +    VkCommandBuffer core_cmd[MAX_COMMANDS];
 +    VkSemaphore signal;
++    // a frame set_image handed over that vk_new_frame hasn't taken yet, and when (CLOCK_MONOTONIC ns)
++    bool fresh;
++    int64_t stamp, last;
 +
 +    // the copy into host memory
 +    VkCommandPool pool;
@@ -1715,6 +1733,10 @@ index 0000000..adcfee8
 +    }
 +    vk.image = *image;
 +    vk.has_image = true;
++    struct timespec t;
++    clock_gettime(CLOCK_MONOTONIC, &t);
++    vk.stamp = (int64_t)t.tv_sec * 1000000000 + t.tv_nsec;
++    vk.fresh = true;
 +    vk.num_wait = num > MAX_SEMAPHORES ? MAX_SEMAPHORES : num;
 +    for (uint32_t i = 0; i < vk.num_wait; i++) {
 +        vk.wait[i] = sems[i];
@@ -1952,6 +1974,25 @@ index 0000000..adcfee8
 +    return true;
 +}
 +
++int64_t vk_new_frame(void) {
++    if (!vk.fresh) {
++        // the same frame again: nothing to copy, but a signal semaphore is signalled for duped frames too
++        if (vk.device && vk.signal) {
++            VkSubmitInfo si = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .signalSemaphoreCount = 1,
++                               .pSignalSemaphores = &vk.signal};
++            pthread_mutex_lock(&queue_lock);
++            vkQueueSubmit(vk.queue, 1, &si, VK_NULL_HANDLE);
++            pthread_mutex_unlock(&queue_lock);
++            vk.signal = VK_NULL_HANDLE;
++        }
++        return -1;
++    }
++    vk.fresh = false;
++    int64_t d = vk.last ? vk.stamp - vk.last : 0;
++    vk.last = vk.stamp;
++    return d;
++}
++
 +void *vk_readback(unsigned w, unsigned h) {
 +    if (!vk.device || !vk.has_image || !w || !h) return NULL;
 +    VkDeviceSize size = (VkDeviceSize)w * h * 4;
@@ -2093,10 +2134,10 @@ index 0000000..adcfee8
 +}
 diff --git a/pkg/worker/caged/libretro/nanoarch/vulkan.go b/pkg/worker/caged/libretro/nanoarch/vulkan.go
 new file mode 100644
-index 0000000..138ef92
+index 0000000..cef9697
 --- /dev/null
 +++ b/pkg/worker/caged/libretro/nanoarch/vulkan.go
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,49 @@
 +package nanoarch
 +
 +// RetroMate: Vulkan cores (vulkan.c). Offered only to cores whose config lists the "vulkan" hack, and only where a
@@ -2110,6 +2151,7 @@ index 0000000..138ef92
 +
 +import (
 +	"errors"
++	"time"
 +	"unsafe"
 +)
 +
@@ -2128,6 +2170,12 @@ index 0000000..138ef92
 +func vulkanInterface() unsafe.Pointer { return unsafe.Pointer(C.vk_interface()) }
 +
 +func vulkanSetNegotiation(iface unsafe.Pointer) { C.vk_set_negotiation(iface) }
++
++// Whether the core handed over a new frame since the last refresh, and how long after the previous one (0: the first).
++func vulkanNewFrame() (time.Duration, bool) {
++	d := C.vk_new_frame()
++	return time.Duration(d), d >= 0
++}
 +
 +// The last frame the core handed over, as XRGB8888 rows of w * 4 bytes, or nil.
 +func vulkanReadback(w, h uint) []byte {

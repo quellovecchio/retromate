@@ -52,10 +52,15 @@ PLATFORMS = {
     # GameCube: the Wii's Dolphin core, its own entry in stream/config.yaml (GameCube pad on port 1)
     "ngc": dict(name="GameCube", thumbs="Nintendo - GameCube", runner="stream", core="dolphin", exts=".iso .rvz .gcz .ciso"),
     "wii": dict(name="Wii", thumbs="Nintendo - Wii", runner="stream", core="dolphin", exts=".iso .wbfs .rvz .gcz .ciso .wia"),
-    # RPCS3 takes folder dumps too, but they are all named PS3_DISC.SFB and cloud-game tells games apart by file name
-    "ps3": dict(name="PlayStation 3", thumbs="Sony - PlayStation 3", runner="stream", core="rpcs3", exts=".iso"),
-    # Eden through a bridge core (stream/eden_bridge.c). libretro-thumbnails has no Switch folder yet: titles only
-    "switch": dict(name="Nintendo Switch", thumbs="Nintendo - Nintendo Switch", runner="stream", core="eden", exts=".nsp .xci"),
+    # RPCS3 takes folder dumps too, but they are all named PS3_DISC.SFB and cloud-game tells games apart by file name.
+    # states=False: no save states (the in-game menu hides them); RPCS3 stops every thread to make one and, with the
+    # game paused in the menu, its RSX thread never stopped: the worker hung and kept the slot.
+    "ps3": dict(name="PlayStation 3", thumbs="Sony - PlayStation 3", runner="stream", core="rpcs3", exts=".iso",
+                states=False),
+    # Eden through a bridge core (stream/eden_bridge.c), which can't serialize. libretro-thumbnails has no Switch
+    # folder yet: titles only
+    "switch": dict(name="Nintendo Switch", thumbs="Nintendo - Nintendo Switch", runner="stream", core="eden", exts=".nsp .xci",
+                   states=False),
 }
 
 
@@ -161,7 +166,7 @@ def scan():
 def out(g):
     p = PLATFORMS[g["platform"]]
     return {**g, "platform_name": p["name"], "runner": p["runner"], "core": p["core"], "local": p.get("local"),
-            "threads": p.get("threads"),
+            "threads": p.get("threads"), "states": p.get("states", True),
             "cover": cover_url(p["thumbs"], g["cover"] or game_name(g["file"]))}
 
 
