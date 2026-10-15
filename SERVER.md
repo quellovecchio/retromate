@@ -262,6 +262,9 @@ sudo apt install -y xserver-xorg-core mesa-utils
 IFS=':.' read -r _ b d f <<< "$(nvidia-smi --query-gpu=pci.bus_id --format=csv,noheader)"
 BUSID=$(printf 'PCI:%d:%d:%d' 0x$b 0x$d 0x$f); echo $BUSID
 sudo tee /etc/X11/xorg.conf <<EOF
+Section "ServerFlags"
+    Option "AutoAddDevices" "false"
+EndSection
 Section "Device"
     Identifier "nvidia"
     Driver     "nvidia"
@@ -271,6 +274,7 @@ EndSection
 Section "Screen"
     Identifier   "screen"
     Device       "nvidia"
+    Option       "UseDisplayDevice" "none"
     DefaultDepth 24
     SubSection "Display"
         Depth   24
@@ -284,7 +288,7 @@ Description=Headless Xorg on the NVIDIA GPU (display :0, for cloud-game)
 After=systemd-user-sessions.service
 
 [Service]
-ExecStart=/usr/lib/xorg/Xorg :0 -nolisten tcp -noreset vt7
+ExecStart=/usr/lib/xorg/Xorg :0 -nolisten tcp -noreset -sharevts -novtswitch vt7
 Restart=always
 
 [Install]
@@ -296,8 +300,9 @@ DISPLAY=:0 glxinfo -B | grep -E 'renderer|version'
 ```
 
 The last line must name the GPU (`OpenGL renderer string: NVIDIA GeForce RTX 3070/PCIe/SSE2`), not `llvmpipe`.
-A monitor plugged into the server goes black with a blinking cursor: that is virtual terminal 7, where Xorg runs with
-nothing to show. Ctrl+Alt+F1 goes back to the text console.
+Xorg leaves the console alone: `-sharevts` makes it neither switch to its VT nor put it in graphics mode,
+`UseDisplayDevice none` keeps the GPU off a plugged-in monitor and `AutoAddDevices false` keeps the keyboard for the
+text console (it would otherwise type into the games). Nothing changes for the stream: the X screen was never shown.
 If it doesn't, `journalctl -u xorg-headless` and `/var/log/Xorg.0.log` say why: a wrong `BusID` is the usual one
 ("Start request repeated too quickly": Xorg exits at once). When it works, the log has `NVIDIA(0)` lines ending with
 `[DRI2] Setup complete`. The NVIDIA Xorg module comes with the full `nvidia-driver-*-open` package of section 5, not
@@ -378,7 +383,8 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now retromate
 ```
 
-Open `http://SERVER_IP:8000` from another machine. To update: `git pull`, `npm --prefix web run build` if the UI
+Open `http://SERVER_IP:8000` from another machine. For HTTPS on a name (`https://retromate.<domain>`) and access over
+the VPN, the reverse proxy in `../homeserver` sends `/ws` to cloud-game and everything else here (`homeserver/GUIDA.md`). To update: `git pull`, `npm --prefix web run build` if the UI
 changed, `sudo systemctl restart retromate`, and `docker compose up -d --build` if `stream/` changed.
 
 To check that a streamed game renders on the GPU, start one and look for the NVIDIA renderer in the log (Dolphin

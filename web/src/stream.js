@@ -2,7 +2,10 @@
 // from the worker, joypad state sent back on the "data" channel.
 // Not a core option: the worker plugs this device id into port 1 (stream/cloud-game.patch, nanoarch.DeviceKey).
 export const DEVICE_KEY = 'retromate_device';
-const STREAM_URL = import.meta.env.VITE_STREAM_URL || `ws://${location.hostname}:8100/ws`;
+// Over HTTPS (behind the reverse proxy, homeserver/edge/Caddyfile) the signalling shares the page's origin: a page on
+// https can't open ws://, and the proxy routes /ws to cloud-game. Plain HTTP on the LAN talks to port 8100 directly.
+const STREAM_URL = import.meta.env.VITE_STREAM_URL
+  || (location.protocol === 'https:' ? `wss://${location.host}/ws` : `ws://${location.hostname}:8100/ws`);
 const T = { INIT: 4, INIT_WEBRTC: 100, SIGNAL: 101, START: 104, SAVE: 106, LOAD: 107, NO_SLOTS: 112, RESET: 113, PAUSE: 114, OPTIONS: 115, SET_OPTION: 116,
   VIDEO_CHANGE: 150 };
 

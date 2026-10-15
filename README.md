@@ -39,7 +39,9 @@ Self-check: `uv run python test_server.py`
 docker compose up -d
 ```
 
-- **Ports:** cloud-game listens on `8100` (WebSocket signalling) and `8443/udp` (WebRTC).
+- **Ports:** cloud-game listens on `8100` (WebSocket signalling) and `8443/udp` (WebRTC). Served over HTTPS, the
+  client opens the signalling on the page's own origin (`wss://<host>/ws`), so the reverse proxy must route `/ws` to
+  `8100` (see `homeserver/GUIDA.md`).
 - **Other machines on the LAN:** start it with `STREAM_HOST_IP=<host LAN IP>`.
 - **Configuration:** PS2 (LRPS2), Wii (Dolphin) and PS3 (RPCS3) core settings are in [stream/config.yaml](stream/config.yaml). Cores are downloaded automatically from the libretro buildbot; Dolphin's `Sys` files are baked into the image.
 - **PS2 BIOS:** `pcsx2_bios` in [stream/config.yaml](stream/config.yaml) must name a file present in `library/bios/ps2`. cloud-game doesn't pass the core's defaults, so without it you get `Could not find any valid PS2 BIOS`.
