@@ -1,18 +1,19 @@
 diff --git a/pkg/api/api.go b/pkg/api/api.go
-index 8b9a17c..a3e0348 100644
+index 8b9a17c..d50fcf5 100644
 --- a/pkg/api/api.go
 +++ b/pkg/api/api.go
-@@ -80,6 +80,9 @@ const (
+@@ -80,6 +80,10 @@ const (
  	GetWorkerList    PT = 111
  	ErrNoFreeSlots   PT = 112
  	ResetGame        PT = 113
 +	PauseGame        PT = 114 // RetroMate: freeze/resume the emulation (the in-game menu)
 +	GetOptions       PT = 115 // RetroMate: the running core's options (the in-game menu)
 +	SetOption        PT = 116 // RetroMate: change one of them
++	PlugPort         PT = 117 // RetroMate: players 2-4 join or leave: plug a device in their port, or unplug it
  	RegisterRoom     PT = 201
  	CloseRoom        PT = 202
  	TerminateSession PT = 204
-@@ -116,6 +119,12 @@ func (p PT) String() string {
+@@ -116,6 +120,14 @@ func (p PT) String() string {
  		return "NoFreeSlots"
  	case ResetGame:
  		return "ResetGame"
@@ -22,6 +23,8 @@ index 8b9a17c..a3e0348 100644
 +		return "GetOptions"
 +	case SetOption:
 +		return "SetOption"
++	case PlugPort:
++		return "PlugPort"
  	case RegisterRoom:
  		return "RegisterRoom"
  	case CloseRoom:
@@ -57,10 +60,10 @@ index 2ce4fde..c526425 100644
  	GameStartUserResponse struct {
  		Av      *AppVideoInfo `json:"av"`
 diff --git a/pkg/api/worker.go b/pkg/api/worker.go
-index d8c7324..6ac47b5 100644
+index d8c7324..8c08df2 100644
 --- a/pkg/api/worker.go
 +++ b/pkg/api/worker.go
-@@ -7,11 +7,27 @@ type (
+@@ -7,11 +7,32 @@ type (
  	}
  	ChangePlayerResponse int
  	GameQuitRequest      StatefulRoom
@@ -81,6 +84,11 @@ index d8c7324..6ac47b5 100644
 +		Key   string `json:"key"`
 +		Value string `json:"value"`
 +	}
++	PlugPortRequest struct { // RetroMate: no answer; the user sends it too (with room_id)
++		StatefulRoom
++		Port   int    `json:"port"`   // 1-3: players 2-4
++		Device string `json:"device"` // a device id the core listed, "" to unplug
++	}
  	ResetGameResponse    string
 -	SaveGameRequest      StatefulRoom
 +	SaveGameRequest      struct { // RetroMate: Name saves a new state in library/states (empty: cloud-game's own slot)
@@ -90,7 +98,7 @@ index d8c7324..6ac47b5 100644
  	SaveGameResponse     string
  	StartGameRequest     struct {
  		StatefulRoom
-@@ -19,6 +35,7 @@ type (
+@@ -19,6 +40,7 @@ type (
  		RecordUser  string
  		Game        string `json:"game"`
  		PlayerIndex int    `json:"player_index"`
@@ -126,10 +134,10 @@ index be5ac42..38dd9ba 100644
  
  // allows custom config path
 diff --git a/pkg/coordinator/user.go b/pkg/coordinator/user.go
-index d11b144..f226a6f 100644
+index d11b144..80081fc 100644
 --- a/pkg/coordinator/user.go
 +++ b/pkg/coordinator/user.go
-@@ -55,13 +55,19 @@ func (u *User) HandleRequests(info HasServerInfo, conf config.CoordinatorConfig)
+@@ -55,13 +55,21 @@ func (u *User) HandleRequests(info HasServerInfo, conf config.CoordinatorConfig)
  		case api.QuitGame:
  			err = api.Do(x, u.HandleQuitGame)
  		case api.SaveGame:
@@ -148,11 +156,13 @@ index d11b144..f226a6f 100644
 +			err = u.HandleGetOptions()
 +		case api.SetOption:
 +			err = api.DoE(x, u.HandleSetOption)
++		case api.PlugPort:
++			err = api.Do(x, u.HandlePlugPort)
  		case api.RecordGame:
  			if !conf.Recording.Enabled {
  				return api.ErrForbidden
 diff --git a/pkg/coordinator/userhandlers.go b/pkg/coordinator/userhandlers.go
-index 51e805c..36d3fa3 100644
+index 51e805c..b0e6ec7 100644
 --- a/pkg/coordinator/userhandlers.go
 +++ b/pkg/coordinator/userhandlers.go
 @@ -77,12 +77,20 @@ func (u *User) HandleStartGame(rq api.GameStartUserRequest, conf config.Coordina
@@ -176,7 +186,7 @@ index 51e805c..36d3fa3 100644
  		return
  	}
  	u.log.Info().Str("id", startGameResp.Rid).Msg("Received room response from worker")
-@@ -107,8 +115,24 @@ func (u *User) HandleResetGame(rq api.ResetGameRequest) {
+@@ -107,8 +115,32 @@ func (u *User) HandleResetGame(rq api.ResetGameRequest) {
  	u.w.ResetGame(u.Id().String())
  }
  
@@ -188,6 +198,14 @@ index 51e805c..36d3fa3 100644
 +		return
 +	}
 +	u.w.PauseGame(u.Id().String(), rq.Paused)
++}
++
++// HandlePlugPort: a player 2-4 joined or left the user's game (RetroMate).
++func (u *User) HandlePlugPort(rq api.PlugPortRequest) {
++	if rq.Rid != u.w.RoomId {
++		return
++	}
++	u.w.PlugPort(u.Id().String(), rq.Port, rq.Device)
 +}
 +
 +// stateName is the optional state name a SaveGame/LoadGame carries (RetroMate); no payload = cloud-game's own slot.
@@ -203,7 +221,7 @@ index 51e805c..36d3fa3 100644
  	if err != nil {
  		return err
  	}
-@@ -123,8 +147,28 @@ func (u *User) HandleSaveGame() error {
+@@ -123,8 +155,28 @@ func (u *User) HandleSaveGame() error {
  	return nil
  }
  
@@ -235,7 +253,7 @@ index 51e805c..36d3fa3 100644
  		return err
  	}
 diff --git a/pkg/coordinator/workerapi.go b/pkg/coordinator/workerapi.go
-index dbceaed..e435b96 100644
+index dbceaed..3d4c768 100644
 --- a/pkg/coordinator/workerapi.go
 +++ b/pkg/coordinator/workerapi.go
 @@ -1,6 +1,10 @@
@@ -277,7 +295,7 @@ index dbceaed..e435b96 100644
  }
  
  func (w *Worker) ChangePlayer(id string, index int) (*api.ChangePlayerResponse, error) {
-@@ -46,6 +51,20 @@ func (w *Worker) ChangePlayer(id string, index int) (*api.ChangePlayerResponse,
+@@ -46,6 +51,24 @@ func (w *Worker) ChangePlayer(id string, index int) (*api.ChangePlayerResponse,
  		}))
  }
  
@@ -293,6 +311,10 @@ index dbceaed..e435b96 100644
 +
 +func (w *Worker) PauseGame(id string, paused bool) {
 +	w.Notify(api.PauseGame, api.PauseGameRequest{StatefulRoom: api.StatefulRoom{Id: id, Rid: w.RoomId}, Paused: paused})
++}
++
++func (w *Worker) PlugPort(id string, port int, device string) {
++	w.Notify(api.PlugPort, api.PlugPortRequest{StatefulRoom: api.StatefulRoom{Id: id, Rid: w.RoomId}, Port: port, Device: device})
 +}
 +
  func (w *Worker) ResetGame(id string) {
@@ -1088,7 +1110,7 @@ index 669862d..34d3e31 100644
  
          case RETRO_DEVICE_ANALOG:
 diff --git a/pkg/worker/caged/libretro/nanoarch/nanoarch.go b/pkg/worker/caged/libretro/nanoarch/nanoarch.go
-index a451aeb..b04c1c9 100644
+index a451aeb..6afa29d 100644
 --- a/pkg/worker/caged/libretro/nanoarch/nanoarch.go
 +++ b/pkg/worker/caged/libretro/nanoarch/nanoarch.go
 @@ -7,6 +7,7 @@ import (
@@ -1108,8 +1130,8 @@ index a451aeb..b04c1c9 100644
 +	declared       []CoreOption
 +	categories     []CoreOptionCategory
 +	optionsChanged atomic.Bool
-+	devices        []CoreDevice // RetroMate: what port 1 can take (SET_CONTROLLER_INFO), and what it has now
-+	device         uint
++	devices        [][]CoreDevice // RetroMate: what each port can take (SET_CONTROLLER_INFO), and what it has now
++	device         [maxPort]uint  // RETRO_DEVICE_NONE (0): unplugged
  	reserved      chan struct{} // limits concurrent use
  	Rot           uint
 -	serializeSize C.size_t
@@ -1141,7 +1163,7 @@ index a451aeb..b04c1c9 100644
  	n.options = maps.Clone(meta.Options)
  	n.options4rom = meta.Options4rom
 +	n.declared, n.categories = nil, nil // the core declares them again in retro_set_environment / retro_init
-+	n.devices, n.device = nil, C.RETRO_DEVICE_JOYPAD
++	n.devices, n.device = nil, [maxPort]uint{}
 +	n.optionsChanged.Store(false)
  
  	corePath := meta.LibPath + meta.LibExt
@@ -1157,7 +1179,7 @@ index a451aeb..b04c1c9 100644
 +		n.options = map[string]string{}
 +	}
 +	for k, v := range n.GameOptions {
-+		if k != DeviceKey {
++		if _, device := DevicePort(k); !device {
 +			n.options[k] = v
 +		}
 +	}
@@ -1202,7 +1224,7 @@ index a451aeb..b04c1c9 100644
  
  	Nan0.tickTime = time.Duration(float64(time.Second) / float64(n.sys.av.timing.fps))
  	if n.vfr {
-@@ -350,9 +396,21 @@ func (n *Nanoarch) LoadGame(path string) error {
+@@ -350,21 +396,50 @@ func (n *Nanoarch) LoadGame(path string) error {
  			runtime.LockOSThread()
  			initVideo()
  			C.bridge_context_reset(Nan0.Video.hw.context_reset)
@@ -1224,42 +1246,81 @@ index a451aeb..b04c1c9 100644
  
  	// set default controller types on all ports
  	// needed for nestopia
-@@ -365,6 +423,15 @@ func (n *Nanoarch) LoadGame(path string) error {
+-	for i := range maxPort {
+-		C.bridge_retro_set_controller_port_device(retroSetControllerPortDevice, C.uint(i), C.RETRO_DEVICE_JOYPAD)
++	// RetroMate: only on the ports the core declared (LRPS2 has two: a third one wrote past its array), and players
++	// 2-4 start unplugged: the page plugs one in when its player joins (PlugPort, DevicePort).
++	for i := range n.ports() {
++		device := uint(C.RETRO_DEVICE_JOYPAD)
++		if i > 0 {
++			device = C.RETRO_DEVICE_NONE
++		}
++		n.plug(i, device)
+ 	}
+ 
+ 	// map custom devices to ports
+ 	for k, v := range n.meta.Hid {
  		for _, device := range v {
- 			C.bridge_retro_set_controller_port_device(retroSetControllerPortDevice, C.uint(k), C.unsigned(device))
- 			n.log.Debug().Msgf("set custom port-device: %v:%v", k, device)
-+			if k == 0 {
-+				n.device = uint(device)
+-			C.bridge_retro_set_controller_port_device(retroSetControllerPortDevice, C.uint(k), C.unsigned(device))
+-			n.log.Debug().Msgf("set custom port-device: %v:%v", k, device)
++			if k < n.ports() {
++				n.plug(k, uint(device))
++				n.log.Debug().Msgf("set custom port-device: %v:%v", k, device)
 +			}
 +		}
 +	}
-+	// RetroMate: the device chosen for this game in the in-game menu (Wii: Wii Remote, + Nunchuk...)
-+	if v, ok := n.GameOptions[DeviceKey]; ok {
-+		if err := n.setDevice(v); err != nil {
-+			n.log.Warn().Err(err).Send()
++	// RetroMate: the devices chosen for this game in the in-game menu (Wii: Wii Remote, + Nunchuk...). Players 2-4's
++	// come here only for a core that reads them once, at start (the Switch bridge: Eden reads its controllers once).
++	for k, v := range n.GameOptions {
++		if p, ok := DevicePort(k); ok {
++			if err := n.setDevice(p, v); err != nil {
++				n.log.Warn().Err(err).Send()
++			}
  		}
  	}
  
-@@ -373,6 +440,18 @@ func (n *Nanoarch) LoadGame(path string) error {
+@@ -373,6 +448,40 @@ func (n *Nanoarch) LoadGame(path string) error {
  	return nil
  }
  
-+// setDevice plugs one of the devices the core listed into port 1, between two frames (the caller holds the frontend
-+// lock). The core takes it like a frontend's controller menu: Dolphin swaps the Wii Remote's extension at once.
-+func (n *Nanoarch) setDevice(value string) error {
-+	d, err := strconv.ParseUint(value, 10, 32)
-+	if err != nil || !slices.ContainsFunc(n.devices, func(x CoreDevice) bool { return x.ID == uint(d) }) {
-+		return fmt.Errorf("unknown device %v", value)
++// setDevice plugs one of the devices the core listed for that port (or the plain RetroPad) into it, "" unplugs it
++// (players 2-4), between two frames (the caller holds the frontend lock). The core takes it like a frontend's
++// controller menu: Dolphin swaps the Wii Remote's extension at once.
++func (n *Nanoarch) setDevice(port int, value string) error {
++	if port >= n.ports() {
++		return fmt.Errorf("port %v: the core has %v", port+1, n.ports())
 +	}
-+	C.bridge_retro_set_controller_port_device(retroSetControllerPortDevice, 0, C.unsigned(d))
-+	n.device = uint(d)
++	if value == "" && port > 0 {
++		n.plug(port, C.RETRO_DEVICE_NONE)
++		return nil
++	}
++	d, err := strconv.ParseUint(value, 10, 32)
++	known := d == C.RETRO_DEVICE_JOYPAD ||
++		port < len(n.devices) && slices.ContainsFunc(n.devices[port], func(x CoreDevice) bool { return x.ID == uint(d) })
++	if err != nil || !known {
++		return fmt.Errorf("unknown device %v on port %v", value, port+1)
++	}
++	n.plug(port, uint(d))
 +	return nil
++}
++
++func (n *Nanoarch) plug(port int, device uint) {
++	C.bridge_retro_set_controller_port_device(retroSetControllerPortDevice, C.uint(port), C.unsigned(device))
++	n.device[port] = device
++}
++
++// ports: how many controller ports the core has, as SET_CONTROLLER_INFO says (all of ours when it says nothing).
++func (n *Nanoarch) ports() int {
++	if len(n.devices) > 0 {
++		return min(len(n.devices), maxPort)
++	}
++	return maxPort
 +}
 +
  func (n *Nanoarch) Shutdown() {
  	Nan0.audioBuffCb = nil
  	if n.LibCo {
-@@ -392,8 +471,20 @@ func (n *Nanoarch) Shutdown() {
+@@ -392,8 +501,20 @@ func (n *Nanoarch) Shutdown() {
  				if err := n.glCtx.BindContext(); err != nil {
  					n.log.Error().Err(err).Msg("ctx switch fail")
  				}
@@ -1280,7 +1341,7 @@ index a451aeb..b04c1c9 100644
  		C.bridge_call(retroUnloadGame)
  		C.bridge_call(retroDeinit)
  		if n.Video.gl.enabled {
-@@ -403,6 +494,12 @@ func (n *Nanoarch) Shutdown() {
+@@ -403,6 +524,12 @@ func (n *Nanoarch) Shutdown() {
  			})
  		}
  	}
@@ -1293,7 +1354,7 @@ index a451aeb..b04c1c9 100644
  
  	setRotation(0)
  	Nan0.sys.av = C.struct_retro_system_av_info{}
-@@ -411,6 +508,7 @@ func (n *Nanoarch) Shutdown() {
+@@ -411,6 +538,7 @@ func (n *Nanoarch) Shutdown() {
  	}
  	n.options = nil
  	n.options4rom = nil
@@ -1301,7 +1362,22 @@ index a451aeb..b04c1c9 100644
  	Nan0.audioBuffCb = nil
  	n.freeCStrings()
  }
-@@ -696,6 +794,23 @@ func coreVideoRefresh(data unsafe.Pointer, width, height uint, packed uint) {
+@@ -455,7 +583,13 @@ func (n *Nanoarch) NotifyFrameTime(usec int64) {
+ func (n *Nanoarch) IsSupported() error                  { return graphics.RGFWTryInit() }
+ func (n *Nanoarch) IsGL() bool                          { return n.Video.gl.enabled }
+ func (n *Nanoarch) IsStopped() bool                     { return n.Stopped.Load() }
+-func (n *Nanoarch) InputRetropad(port int, data []byte) { n.retropad.SetInput(port, data) }
++func (n *Nanoarch) InputRetropad(port int, data []byte) {
++	// RetroMate: players 2-4 of the same page add their port (1-3) as a 15th byte; player 1 sends the plain 14
++	if len(data) == 15 && data[14] < maxPort {
++		port, data = int(data[14]), data[:14]
++	}
++	n.retropad.SetInput(port, data)
++}
+ func (n *Nanoarch) InputKeyboard(_ int, data []byte) {
+ 	if n.keyboardCb == nil {
+ 		return
+@@ -696,6 +830,23 @@ func coreVideoRefresh(data unsafe.Pointer, width, height uint, packed uint) {
  	if data != C.RETRO_HW_FRAME_BUFFER_VALID {
  		//noinspection GoRedundantConversion
  		data_ = unsafe.Slice((*byte)(data), bytes)
@@ -1325,7 +1401,7 @@ index a451aeb..b04c1c9 100644
  	} else {
  		// if Libretro renders frame with OpenGL context
  		data_ = graphics.ReadFramebuffer(bytes, width, height)
-@@ -830,6 +945,32 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
+@@ -830,6 +981,32 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
  			return true
  		}
  		return false
@@ -1358,7 +1434,7 @@ index a451aeb..b04c1c9 100644
  	case C.RETRO_ENVIRONMENT_GET_VARIABLE:
  		if Nan0.options == nil {
  			return false
-@@ -850,6 +991,16 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
+@@ -850,6 +1027,16 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
  		}
  		return false
  	case C.RETRO_ENVIRONMENT_SET_HW_RENDER:
@@ -1375,7 +1451,7 @@ index a451aeb..b04c1c9 100644
  		if Nan0.Video.gl.enabled {
  			Nan0.Video.hw = (*C.struct_retro_hw_render_callback)(data)
  			Nan0.Video.hw.get_current_framebuffer = (C.retro_hw_get_current_framebuffer_t)(C.core_get_current_framebuffer_cgo)
-@@ -857,29 +1008,48 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
+@@ -857,29 +1044,50 @@ func coreEnvironment(cmd C.unsigned, data unsafe.Pointer) C.bool {
  			return true
  		}
  		return false
@@ -1433,23 +1509,25 @@ index a451aeb..b04c1c9 100644
 +		*(*unsafe.Pointer)(data) = p
 +		return true
 +	case C.RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
-+		// RetroMate: port 1's devices, for the in-game menu (cloud-game gives each player port 1)
-+		info := (*C.struct_retro_controller_info)(data)
++		// RetroMate: each port's devices, for the in-game menu: one entry per port, up to one with no types
 +		Nan0.devices = nil
-+		if info != nil && info.types != nil {
++		for info := (*C.struct_retro_controller_info)(data); info != nil && info.types != nil && len(Nan0.devices) < 16; info =
++			(*C.struct_retro_controller_info)(unsafe.Add(unsafe.Pointer(info), unsafe.Sizeof(*info))) {
++			var list []CoreDevice
 +			for _, d := range unsafe.Slice(info.types, info.num_types) {
-+				Nan0.devices = append(Nan0.devices, CoreDevice{ID: uint(d.id), Label: cstr(d.desc)})
++				list = append(list, CoreDevice{ID: uint(d.id), Label: cstr(d.desc)})
  			}
 -			//Nan0.log.Debug().Msgf("%v", cInfo.String())
++			Nan0.devices = append(Nan0.devices, list)
  		}
  		return true
  	case C.RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK:
 diff --git a/pkg/worker/caged/libretro/nanoarch/options.go b/pkg/worker/caged/libretro/nanoarch/options.go
 new file mode 100644
-index 0000000..f5f4fb5
+index 0000000..6f40dbf
 --- /dev/null
 +++ b/pkg/worker/caged/libretro/nanoarch/options.go
-@@ -0,0 +1,178 @@
+@@ -0,0 +1,195 @@
 +package nanoarch
 +
 +// RetroMate: the core's own options, as the core declares them through the libretro API (any core, any console), so
@@ -1465,6 +1543,7 @@ index 0000000..f5f4fb5
 +	"cmp"
 +	"fmt"
 +	"slices"
++	"strconv"
 +	"strings"
 +	"unsafe"
 +)
@@ -1496,14 +1575,25 @@ index 0000000..f5f4fb5
 +}
 +
 +// DeviceKey isn't a core option: it names port 1's device (one of CoreOptions.Devices), so that it travels like one,
-+// in the start request and through SetOption, and is saved with the game's options.
++// in the start request and through SetOption, and is saved with the game's options. Ports 2-4 are DeviceKey_2 to _4,
++// "" unplugging them (PlugPort, when a player leaves).
 +const DeviceKey = "retromate_device"
++
++// DevicePort: the port (0-3) a device key names.
++func DevicePort(key string) (int, bool) {
++	if key == DeviceKey {
++		return 0, true
++	}
++	p, err := strconv.Atoi(strings.TrimPrefix(key, DeviceKey+"_"))
++	return p - 1, err == nil && strings.HasPrefix(key, DeviceKey+"_") && p >= 2 && p <= maxPort
++}
 +
 +type CoreOptions struct {
 +	Categories []CoreOptionCategory `json:"categories,omitempty"`
 +	Options    []CoreOption         `json:"options"`
-+	Devices    []CoreDevice         `json:"devices,omitempty"`
++	Devices    []CoreDevice         `json:"devices,omitempty"` // port 1's (the other ports take the same on our cores)
 +	Device     uint                 `json:"device"`
++	Ports      []uint               `json:"ports"` // each port's device now, 0 unplugged
 +}
 +
 +func cstr(p *C.char) string {
@@ -1609,13 +1699,18 @@ index 0000000..f5f4fb5
 +			opts[i].Value = strings.TrimRight(v, "\x00") // GET_VARIABLE keeps them NUL-terminated
 +		}
 +	}
-+	return CoreOptions{Categories: n.categories, Options: opts, Devices: n.devices, Device: n.device}
++	var devices []CoreDevice
++	if len(n.devices) > 0 {
++		devices = n.devices[0]
++	}
++	return CoreOptions{Categories: n.categories, Options: opts, Devices: devices, Device: n.device[0],
++		Ports: slices.Clone(n.device[:n.ports()])}
 +}
 +
 +// SetOption changes one option of the running core; only declared options and values are taken.
 +func (n *Nanoarch) SetOption(key, value string) error {
-+	if key == DeviceKey {
-+		return n.setDevice(value)
++	if p, ok := DevicePort(key); ok {
++		return n.setDevice(p, value)
 +	}
 +	i := slices.IndexFunc(n.declared, func(o CoreOption) bool { return o.Key == key })
 +	if i < 0 || !slices.ContainsFunc(n.declared[i].Values, func(v CoreOptionValue) bool { return v.Value == value }) {
@@ -2188,10 +2283,10 @@ index 0000000..cef9697
 +
 +func vulkanDestroy() { C.vk_destroy() }
 diff --git a/pkg/worker/coordinator.go b/pkg/worker/coordinator.go
-index a537ec1..8df8849 100644
+index a537ec1..c4fa1c1 100644
 --- a/pkg/worker/coordinator.go
 +++ b/pkg/worker/coordinator.go
-@@ -93,6 +93,12 @@ func (c *coordinator) HandleRequests(w *Worker) chan struct{} {
+@@ -93,6 +93,14 @@ func (c *coordinator) HandleRequests(w *Worker) chan struct{} {
  			err = api.Do(x, func(d api.GameQuitRequest) { c.HandleQuitGame(d, w) })
  		case api.ResetGame:
  			err = api.Do(x, func(d api.ResetGameRequest) { c.HandleResetGame(d, w) })
@@ -2201,23 +2296,34 @@ index a537ec1..8df8849 100644
 +			err = api.Do(x, func(d api.GetOptionsRequest) { out = c.HandleGetOptions(d, w) })
 +		case api.SetOption:
 +			err = api.Do(x, func(d api.SetOptionRequest) { out = c.HandleSetOption(d, w) })
++		case api.PlugPort:
++			err = api.Do(x, func(d api.PlugPortRequest) { c.HandlePlugPort(d, w) })
  		default:
  			c.log.Warn().Msgf("unhandled packet type %v", x.T)
  		}
 diff --git a/pkg/worker/coordinatorhandlers.go b/pkg/worker/coordinatorhandlers.go
-index 6972cc7..fe9504b 100644
+index 6972cc7..1ff7658 100644
 --- a/pkg/worker/coordinatorhandlers.go
 +++ b/pkg/worker/coordinatorhandlers.go
-@@ -2,6 +2,8 @@ package worker
+@@ -2,6 +2,9 @@ package worker
  
  import (
  	"encoding/json"
++	"fmt"
 +	"path/filepath"
 +	"strings"
  
  	"github.com/giongto35/cloud-game/v3/pkg/api"
  	"github.com/giongto35/cloud-game/v3/pkg/com"
-@@ -127,8 +129,10 @@ func (c *coordinator) HandleGameStart(rq api.StartGameRequest, w *Worker) api.Ou
+@@ -9,6 +12,7 @@ import (
+ 	"github.com/giongto35/cloud-game/v3/pkg/games"
+ 	"github.com/giongto35/cloud-game/v3/pkg/network/webrtc"
+ 	"github.com/giongto35/cloud-game/v3/pkg/worker/caged"
++	"github.com/giongto35/cloud-game/v3/pkg/worker/caged/libretro/nanoarch"
+ 	"github.com/giongto35/cloud-game/v3/pkg/worker/media"
+ 	"github.com/giongto35/cloud-game/v3/pkg/worker/room"
+ )
+@@ -127,8 +131,10 @@ func (c *coordinator) HandleGameStart(rq api.StartGameRequest, w *Worker) api.Ou
  		// start the emulator
  		app := room.WithEmulator(w.mana.Get(caged.Libretro))
  		app.ReloadFrontend()
@@ -2228,7 +2334,7 @@ index 6972cc7..fe9504b 100644
  		app.EnableCloudStorage(uid, w.storage)
  		app.EnableRecording(rq.Record, rq.RecordUser, gameName)
  
-@@ -244,6 +248,35 @@ func (c *coordinator) HandleQuitGame(rq api.GameQuitRequest, w *Worker) {
+@@ -244,6 +250,48 @@ func (c *coordinator) HandleQuitGame(rq api.GameQuitRequest, w *Worker) {
  	}
  }
  
@@ -2236,6 +2342,19 @@ index 6972cc7..fe9504b 100644
 +func (c *coordinator) HandlePauseGame(rq api.PauseGameRequest, w *Worker) {
 +	if r := w.router.FindRoom(rq.Rid); r != nil {
 +		room.WithEmulator(r.App()).SetPaused(rq.Paused)
++	}
++}
++
++// HandlePlugPort plugs a device into player 2-4's port when they join, or unplugs it when they leave (RetroMate):
++// the same as choosing it through SetOption with that port's device key.
++func (c *coordinator) HandlePlugPort(rq api.PlugPortRequest, w *Worker) {
++	r := w.router.FindRoom(rq.Rid)
++	if r == nil || rq.Port < 1 {
++		return
++	}
++	key := fmt.Sprintf("%s_%d", nanoarch.DeviceKey, rq.Port+1)
++	if err := room.WithEmulator(r.App()).SetCoreOption(key, rq.Device); err != nil {
++		c.log.Warn().Err(err).Msgf("cannot plug port %v", rq.Port+1)
 +	}
 +}
 +
@@ -2264,7 +2383,7 @@ index 6972cc7..fe9504b 100644
  func (c *coordinator) HandleResetGame(rq api.ResetGameRequest, w *Worker) api.Out {
  	if r := w.router.FindRoom(rq.Rid); r != nil {
  		room.WithEmulator(r.App()).Reset()
-@@ -252,12 +285,31 @@ func (c *coordinator) HandleResetGame(rq api.ResetGameRequest, w *Worker) api.Ou
+@@ -252,12 +300,31 @@ func (c *coordinator) HandleResetGame(rq api.ResetGameRequest, w *Worker) api.Ou
  	return api.ErrPacket
  }
  
@@ -2297,7 +2416,7 @@ index 6972cc7..fe9504b 100644
  		c.log.Error().Err(err).Msg("cannot save game state")
  		return api.ErrPacket
  	}
-@@ -269,7 +321,11 @@ func (c *coordinator) HandleLoadGame(rq api.LoadGameRequest, w *Worker) api.Out
+@@ -269,7 +336,11 @@ func (c *coordinator) HandleLoadGame(rq api.LoadGameRequest, w *Worker) api.Out
  	if r == nil {
  		return api.ErrPacket
  	}

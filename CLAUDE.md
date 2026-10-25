@@ -50,7 +50,7 @@ the old process alive: restart the `api` server after editing `server.py`.
   `<dialog>` dashboard (command bar, game card, volume, players; panels for states, controller mapping, emulator
   options, restart/quit confirmations) that replaces EmulatorJS's own bar and menus (hidden in CSS). It is
   emulator-agnostic: `play.js` builds an adapter (contract at the top of `ingame.js`) per runner, and optional parts
-  of it switch features: `ejsAdapter` (4 players, options) and `streamAdapter` (1 player, the server core's options).
+  of it switch features: `ejsAdapter` (4 players, options) and `streamAdapter` (4 players, the server core's options).
   Both map the same 24 EmulatorJS inputs (16 buttons + 8 stick directions); stream.js turns them into the RetroPad
   bits and the analog axes, so a stick direction can sit on a key or a button and vice versa. Emulator options are data: `adapter.options()` returns
   categories of option trees (`{id, label, values, value}` leaves) and `setOption(id, value)` applies one; for
@@ -59,10 +59,17 @@ the old process alive: restart the `api` server after editing `server.py`.
   libretro core declares (GetOptions 115 / SetOption 116, see the stream section), its categories as the menu's tabs:
   nothing per emulator, a new console gets them for free. Changes apply to the running core and are saved per game on
   the server (`GET/PUT /api/games/{id}/options` -> `library/options/{slug}/{game}.json`), sent with every start.
-  The Controller panel also picks the controller the core emulates for player 1 (`adapter.emulated()`, streamed games
-  only: Wii Remote, + Nunchuk, Classic Controller...), applied at once and saved per game as the `retromate_device`
-  option; `WII_DEVICES` in stream.js names what each RetroPad input does on each Wii device (Dolphin's defaults,
-  `DolphinLibretro/Input.cpp`: its own input descriptors aren't re-sent when the device changes).
+  The Controller panel also picks the controller the core emulates for each player (`adapter.emulated(p)`, streamed
+  games only: Wii Remote, + Nunchuk, Classic Controller..., Switch Pro Controller / Joy-Con), applied at once (Switch:
+  from the next start, `emulatedLater`) and saved per game as the `retromate_device` option (`retromate_device_2.._4`
+  for players 2-4, who follow player 1's until one is chosen for them); `WII_DEVICES` in stream.js names what each
+  RetroPad input does on each Wii device (Dolphin's defaults, `DolphinLibretro/Input.cpp`: its own input descriptors
+  aren't re-sent when the device changes).
+  Streamed multiplayer, all on one page: pads go to players in the order they show up (`assignPads` in stream.js, a
+  toast each; a pad that leaves frees its place, the same pad coming back takes it again), and a key belongs to one
+  player. Players 2-4's mappings are saved per console with player 1's, their devices are not. Player 2-4 sends
+  nothing while it has no pad or keys: joining plugs its controller into its port (PlugPort 117), leaving sends a few
+  "all released" packets and unplugs it.
   While open it pauses the game and blocks EmulatorJS input by overriding `ejs.isPopupOpen`; nav.js drives it
   (`data-nav-lock` is set whenever the menu is closed). Controller mappings are saved per console on the server
   (`GET/PUT /api/controls/{slug}` -> `library/controls/{slug}.json`) and applied to `ejs.controls` /
@@ -104,7 +111,8 @@ the old process alive: restart the `api` server after editing `server.py`.
 - `web/src/stream.js` is a minimal client for cloud-game's coordinator protocol: WebSocket JSON envelopes
   `{t, p}` (4 init, 100/101 WebRTC signalling with JSON-string `sdp`/`ice`, 104 start, 112 no free slot,
   150 video info on the data channel). The worker sends the offer. Input goes on the negotiated `data`
-  channel as 14 bytes little-endian: `[buttons u16][LX LY RX RY L2 R2 i16]`, libretro joypad bit order.
+  channel as 14 bytes little-endian: `[buttons u16][LX LY RX RY L2 R2 i16]`, libretro joypad bit order, plus the port
+  (1-3) as a 15th byte for players 2-4 (player 1's stays at 14, read as the connection's own port).
   cloud-game identifies games by file stem, not by RetroMate id. OpenGL frames arrive bottom-up: honour the
   `flip` flag in the video info. Opzioni's "Ottimizzazione giochi d'azione" (`getLowLatency`, per device, off by
   default) sets `jitterBufferTarget = 0` on the video receiver: Chrome's jitter buffer otherwise held RPCS3's uneven
@@ -128,8 +136,12 @@ the old process alive: restart the `api` server after editing `server.py`.
   core options read and changed at run time (the core's own declarations, any libretro API version: GetOptions 115
   answers `{categories, options: [{key, label, category, values, default, value, hidden}]}`, SetOption 116
   `{key, value}` answers ok/err and reaches the core through `GET_VARIABLE_UPDATE`; `nanoarch/options.go`), PauseGame (type 114, `{room_id, paused}`) so the in-game menu freezes a streamed game, port 1's emulated device:
-  GetOptions also answers `devices` (from `SET_CONTROLLER_INFO`) and `device`, and the pseudo-option `retromate_device`
-  plugs one in at start or mid-game, the raw formats an encoder takes: `formats` in its config entry). `stream()` returns a
+  GetOptions also answers `devices` (from `SET_CONTROLLER_INFO`), `device` and `ports` (each port's device, 0
+  unplugged), and the pseudo-option `retromate_device` plugs one in at start or mid-game, players 2-4 on one connection:
+  a 15-byte input packet names its port, PlugPort 117 `{room_id, port, device}` plugs a device into port 2-4 (`""`
+  unplugs it; same as `retromate_device_N`), those ports start unplugged, and only the ports the core declares in
+  `SET_CONTROLLER_INFO` are touched (upstream set all four: LRPS2 has two, and wrote past its array), the raw formats an
+  encoder takes: `formats` in its config entry). `stream()` returns a
   controller (pause, reset 113, save 106 / load 107 with their replies, input mapping) that `streamAdapter` wraps.
   SaveGame/LoadGame take a `name` (digits): the worker writes `library/states/{platform}/{game}/{name}.state`
   (mounted on `/usr/local/share/cloud-game/states`), the page uploads the screenshot from the `<video>` frame. Without
@@ -158,7 +170,8 @@ the old process alive: restart the `api` server after editing `server.py`.
   `couldn't load the lib: ...` in the worker log, so check its DT_NEEDED first.
 - PS2 memory cards (`Mcd001.ps2`, `Mcd002.ps2`, shared by every game) are in `library/saves/ps2/memcards`, mounted on
   LRPS2's `system/pcsx2/memcards`. Anything a core writes outside a mounted folder dies with the container: check where
-  a new core keeps its saves before trusting it.
+  a new core keeps its saves before trusting it. PS2 has two players: LRPS2 forces the multitap off
+  (`pcsx2/PAD/PAD.cpp`) and reads ports 1-2 only, so players 3-4 do nothing there.
 - DS (EmulatorJS `nds`, melonDS) and PSP (`psp`, PPSSPP) run in the browser. PPSSPP needs threads: `threads=True` in
   `PLATFORMS`, `play.js` reloads the page as `play.html?...&threads`, which `isolate()` (and vite) serve cross-origin
   isolated, and sets `EJS_threads`. PPSSPP has no SRAM: its in-game saves are memory stick folders
@@ -174,10 +187,13 @@ the old process alive: restart the `api` server after editing `server.py`.
   session to the screen) and
   hands cloud-game the X screen every `retro_run` (XRGB8888 via MIT-SHM with a memfd, SHM 1.2, so no shared IPC
   namespace), the sound of a private PulseAudio whose null sink is Eden's output (its monitor recorded on a thread),
-  and RetroPad port 0 as a uinput gamepad (Xbox 360 ids, D-pad as a hat). Eden reads that pad through SDL from the
-  controller entries the bridge rewrites at every start in `user/config/qt-config.ini` (`player_0_*`, each with
-  `\default=false` or Eden ignores it; SDL GUID with the name CRC zeroed as Eden stores it, buttons numbered in evdev
-  code order: `gcc -DEDEN_BRIDGE_TEST` builds its self-check). Everything Eden keeps is in `library/saves/switch`
+  and RetroPad ports 0-3 as four uinput gamepads (Xbox 360 ids, D-pad as a hat). Eden reads them through SDL from the
+  controller entries the bridge rewrites at every start in `user/config/qt-config.ini` (`player_0_*` to `player_3_*`,
+  all four connected, each with `\default=false` or Eden ignores it; SDL GUID with the name CRC zeroed as Eden stores
+  it, `port:N` telling the identical pads apart, buttons numbered in evdev code order: `gcc -DEDEN_BRIDGE_TEST` builds
+  its self-check). Eden reads them only at start, so the bridge starts it at the first `retro_run`, after the worker
+  has plugged in each port's controller type (`SWITCH_PADS`: Pro Controller, Joy-Con pair/left/right, player 1's when
+  none); the page sends players 2-4's `retromate_device_N` in the start request for the Switch only. Everything Eden keeps is in `library/saves/switch`
   (mounted on `libretro/system/switch`): the AppImage and its portable `user` folder (a `user` directory in its
   working directory). The image builds the core and copies it into the `assets/cores` volume at every start
   (`ENTRYPOINT`). NVIDIA host only (Vulkan): `docker-compose.nvidia.yml` passes `/dev/uinput` and the host's

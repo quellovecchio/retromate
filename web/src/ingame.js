@@ -10,8 +10,9 @@
 //             (missing: no save states), players (default 4), keyMap {keyCode: name},
 //             options() -> Promise<[Category]>, setOption(id, value)  (missing: Opzioni is disabled),
 //             resetOptions() -> Promise  (back to the defaults; missing: no reset button)
-//             emulated() -> Promise<{ list: [Device], device: id } | null>, setEmulated(id) -> Promise  (the controller
-//             the emulator plugs in for player 1, e.g. a Wii Remote; missing or null: no choice)
+//             emulated(player) -> Promise<{ list: [Device], device: id } | null>, setEmulated(id, player) -> Promise
+//             (the controller the emulator plugs in for that player, e.g. a Wii Remote; missing or null: no choice),
+//             emulatedLater (true: a change applies from the next start)
 // Device = { id, name, inputs?: { input: what it does }, sticks?: [left, right] }  (missing: the RetroPad's names)
 // Controls model, saved per console on the server: { players: [{ device: 'keyboard' | 'none' | 'pad:<id>',
 //            keys: { input: keyCode }, pad: { input: EmulatorJS gamepad label } } x 4] }
@@ -401,7 +402,13 @@ export function ingame(adapter, saved, { variant } = {}) {
     let emu = null; // the emulated controller: applied and saved (per game) at once, not part of the draft
     openPanel('controls', trigger, 'Controller', '<div class="ig-ctl"></div>', (el, pn) => {
       const host = el.querySelector('.ig-ctl');
-      adapter.emulated?.().then((e) => { emu = e; if (e && !capture) render(); }).catch(() => {});
+      // each player's own: asked again when another player's tab opens (the answer for a player left since is dropped)
+      const askEmu = (focusSel) => {
+        const p = player;
+        emu = null;
+        adapter.emulated?.(p).then((e) => { if (p === player) { emu = e; if (e && !capture) render(focusSel); } }).catch(() => {});
+      };
+      askEmu();
       const dirty = () => JSON.stringify(draft) !== JSON.stringify(controls);
       const render = (focusSel) => {
         const pl = draft.players[player];
@@ -410,7 +417,7 @@ export function ingame(adapter, saved, { variant } = {}) {
         if (pl.device.startsWith('pad:') && !devices.some(([d]) => d === pl.device)) devices.unshift([pl.device, `${shortPad(pl.device.slice(4))} (non collegato)`, 'game-controller']);
         const usesPad = pl.device.startsWith('pad:');
         const binding = (i) => (usesPad ? padName(pl.pad[i], /057e/i.test(pl.device)) : keyName(pl.keys[i], adapter.keyMap));
-        const as = player === 0 && emu?.list.find((d) => d.id === emu.device); // what player 1's inputs do in the game
+        const as = emu?.list.find((d) => d.id === emu.device); // what this player's inputs do in the game
         const stickOf = (i) => (i >= 16 ? +(i >= 20) : -1);
         const does = (i) => (stickOf(i) < 0 ? as?.inputs?.[i] : as?.sticks?.[stickOf(i)]);
         const unused = (i) => as?.inputs && i < 16 && !(i >= 4 && i <= 7) && !does(i); // the d-pad and sticks always count
@@ -421,8 +428,8 @@ export function ingame(adapter, saved, { variant } = {}) {
           <div class="ig-devices" data-row role="group" aria-label="Dispositivo del giocatore ${player + 1}">${devices.map(([d, name, icon]) => `
             <button class="ig-chip" data-device="${esc(d)}" aria-pressed="${pl.device === d}"${pl.device === d ? ' aria-current="true"' : ''}><i class="ph ph-${icon}" aria-hidden="true"></i><span>${esc(name)}</span></button>`).join('')}
           </div>
-          ${player === 0 && emu ? `
-          <h3 class="ig-ctl-title">Controller emulato <small>salvato per questo gioco</small></h3>
+          ${emu ? `
+          <h3 class="ig-ctl-title">Controller emulato <small>salvato per questo gioco${adapter.emulatedLater ? ', vale dal prossimo avvio' : ''}</small></h3>
           <div class="ig-devices" data-row role="group" aria-label="Controller emulato">${emu.list.map((d) => `
             <button class="ig-chip" data-emu="${d.id}" aria-pressed="${d.id === emu.device}"${d.id === emu.device ? ' aria-current="true"' : ''}><i class="ph ph-plug" aria-hidden="true"></i><span>${esc(d.name)}</span></button>`).join('')}
           </div>` : ''}
@@ -464,13 +471,13 @@ export function ingame(adapter, saved, { variant } = {}) {
         const b = e.target.closest('button');
         if (!b || b.disabled) return;
         asking = false;
-        if (b.dataset.player) { player = +b.dataset.player; render(`[data-player="${player}"]`); }
+        if (b.dataset.player) { player = +b.dataset.player; render(`[data-player="${player}"]`); askEmu(`[data-player="${player}"]`); }
         else if (b.dataset.emu) {
           const d = emu.list.find((x) => x.id === +b.dataset.emu);
           try {
-            await adapter.setEmulated(d.id);
+            await adapter.setEmulated(d.id, player);
             emu.device = d.id;
-            toast(`${d.name} collegato per questo gioco`);
+            toast(adapter.emulatedLater ? `${d.name} dal prossimo avvio` : `${d.name} collegato per questo gioco`);
           } catch {
             toast('Il core non accetta questo controller');
           }
@@ -517,6 +524,17 @@ export function ingame(adapter, saved, { variant } = {}) {
     const done = (value) => {
       stopCapture();
       if (value !== undefined) (usesPad ? pl.pad : pl.keys)[input] = value;
+      // A key belongs to one player: taking it frees it from the others (the pads are each player's own).
+      if (value !== undefined && !usesPad) {
+        draft.players.forEach((other, p) => {
+          for (const [i, code] of Object.entries(other.keys)) {
+            if (p !== player && code === value) {
+              delete other.keys[i];
+              toast(`Tasto tolto al giocatore ${p + 1}`);
+            }
+          }
+        });
+      }
       render(`[data-input="${input}"]`);
       if (value !== undefined) panel?.el.querySelector(`[data-input="${input}"]`)?.setAttribute('data-bound', '');
     };

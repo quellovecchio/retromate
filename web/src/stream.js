@@ -1,13 +1,16 @@
 // Client for cloud-game (docker-compose.yml): WebSocket signalling with the coordinator, WebRTC video/audio
 // from the worker, joypad state sent back on the "data" channel.
-// Not a core option: the worker plugs this device id into port 1 (stream/cloud-game.patch, nanoarch.DeviceKey).
+// Not a core option: the worker plugs this device id into port 1 (stream/cloud-game.patch, nanoarch.DeviceKey);
+// players 2-4's are DEVICE_KEY_2.._4 (deviceKey(p)).
 export const DEVICE_KEY = 'retromate_device';
+export const deviceKey = (p) => (p ? `${DEVICE_KEY}_${p + 1}` : DEVICE_KEY);
+const JOYPAD = '1'; // RETRO_DEVICE_JOYPAD: the plain RetroPad, which every port takes
 // Over HTTPS (behind the reverse proxy, homeserver/edge/Caddyfile) the signalling shares the page's origin: a page on
 // https can't open ws://, and the proxy routes /ws to cloud-game. Plain HTTP on the LAN talks to port 8100 directly.
 const STREAM_URL = import.meta.env.VITE_STREAM_URL
   || (location.protocol === 'https:' ? `wss://${location.host}/ws` : `ws://${location.hostname}:8100/ws`);
 const T = { INIT: 4, INIT_WEBRTC: 100, SIGNAL: 101, START: 104, SAVE: 106, LOAD: 107, NO_SLOTS: 112, RESET: 113, PAUSE: 114, OPTIONS: 115, SET_OPTION: 116,
-  VIDEO_CHANGE: 150 };
+  PLUG: 117, VIDEO_CHANGE: 150 };
 
 // libretro RETRO_DEVICE_ID_JOYPAD_* bit -> standard Gamepad API button index
 // (B, Y, Select, Start, Up, Down, Left, Right, A, X, L, R, L2, R2, L3, R3)
@@ -75,9 +78,10 @@ function emulatedDevice(platform, { id, label }) {
   return wii ? { id, ...wii, name: wii.name + (wiiBase(id) !== id ? ' + MotionPlus' : '') } : { id, name: label };
 }
 
-// The in-game menu's controller model (see ingame.js) for a streamed game: player 1 only (cloud-game gives each
-// connection one port), EmulatorJS's input numbers: 0-15 the RetroPad buttons (same order as the libretro joypad
-// bits), 16-23 the stick directions (left stick right, left, down, up; then the right stick).
+// The in-game menu's controller model (see ingame.js) for a streamed game: four players on the one connection (the
+// worker reads players 2-4's port from their packets), EmulatorJS's input numbers: 0-15 the RetroPad buttons (same
+// order as the libretro joypad bits), 16-23 the stick directions (left stick right, left, down, up; then the right
+// stick). Players 2-4 start with no device and no keys: pads are handed out as they show up (assignPads).
 const PAD_LABELS = ['BUTTON_1', 'BUTTON_2', 'BUTTON_3', 'BUTTON_4', 'LEFT_TOP_SHOULDER', 'RIGHT_TOP_SHOULDER', 'LEFT_BOTTOM_SHOULDER',
   'RIGHT_BOTTOM_SHOULDER', 'SELECT', 'START', 'LEFT_STICK', 'RIGHT_STICK', 'DPAD_UP', 'DPAD_DOWN', 'DPAD_LEFT', 'DPAD_RIGHT'];
 const STICKS = ['LEFT_STICK_X:+1', 'LEFT_STICK_X:-1', 'LEFT_STICK_Y:+1', 'LEFT_STICK_Y:-1',
@@ -106,11 +110,41 @@ function strength(gp, label) {
   return a < 0 ? 0 : Math.max(0, (gp.axes[a] || 0) * (dir === '-1' ? -1 : 1));
 }
 
+// The pad player p plays with, or null: the very one (Gamepad.index) handed to them, else the first one with their
+// device's id (a pad saved for player 1, or the local core, which hands out nothing).
+function padOf(ctl, p) {
+  const pl = ctl.controls.players[p];
+  if (!pl.device.startsWith('pad:')) return null;
+  const id = pl.device.slice(4);
+  const i = ctl.padIndex?.[p];
+  const pads = navigator.getGamepads();
+  return i != null ? (pads[i]?.id === id ? pads[i] : null) : [...pads].find((gp) => gp?.id === id) ?? null;
+}
+
+// Hands each connected pad nobody holds to a player, in order: back to the player whose device it is (the pad saved for
+// player 1, or the one a player had before it went away), else to the first free player: no device, a pad that isn't
+// connected, or player 1 on the keyboard only because no pad was there yet (ctl.fallback). A pad that goes away leaves
+// its player's place free. say(text) reports each change.
+function assignPads(ctl, say) {
+  const players = ctl.controls.players;
+  ctl.padIndex = ctl.padIndex.map((i, p) => (i != null && padOf(ctl, p) ? i : null));
+  for (const gp of navigator.getGamepads()) {
+    if (!gp || ctl.padIndex.includes(gp.index)) continue;
+    let p = players.findIndex((pl, q) => ctl.padIndex[q] == null && pl.device === `pad:${gp.id}`);
+    if (p < 0) p = players.findIndex((pl, q) => pl.device === 'none' || (q === 0 && ctl.fallback) || (pl.device.startsWith('pad:') && ctl.padIndex[q] == null));
+    if (p < 0) continue;
+    players[p].device = `pad:${gp.id}`;
+    ctl.padIndex[p] = gp.index;
+    if (!p) ctl.fallback = false;
+    say?.(`Giocatore ${p + 1}: ${gp.id.replace(/\s*\(.*$/, '').trim() || 'Controller'}`);
+  }
+}
+
 // Starts a streamed game in container and returns its controller, which the in-game menu drives:
-// { controls, block(on), pause(on), reset(), save(name), load(name), options(), setOption(key, value), video, flip,
-// devices(), onPlaying }. ctl.startOptions ({core option: value}) go with the start request, on top of ctl.baseOptions (what
-// RetroMate itself sends: the Wii language). It survives the retries below.
-export function stream(game, container, status, attempt = 0, ctl = { controls: streamDefaultControls(), blocked: false }) {
+// { controls, setControls(model), block(on), pause(on), reset(), save(name), load(name), options(), setOption(key, value),
+// replug(), video, flip, devices(), onPlaying, onPlayer(text) }. ctl.startOptions ({core option: value}) go with the start
+// request, on top of ctl.baseOptions (what RetroMate itself sends: the Wii language). It survives the retries below.
+export function stream(game, container, status, attempt = 0, ctl = newCtl()) {
   const gameName = game.file.split('/').pop().replace(/\.[^.]+$/, ''); // cloud-game ids games by file stem
   const video = Object.assign(document.createElement('video'), { autoplay: true, playsInline: true });
   container.append(video);
@@ -146,9 +180,23 @@ export function stream(game, container, status, attempt = 0, ctl = { controls: s
     // The controllers the core can emulate on port 1 and the one plugged in: { list: [emulatedDevice], device }.
     // Devices built on RETRO_DEVICE_NONE read no RetroPad (Dolphin's real Wii Remote, over Bluetooth): left out.
     // One is chosen with setOption(DEVICE_KEY, id).
-    devices: () => ctl.options().then((o) => o && {
-      list: (o.devices ?? []).filter((d) => d.id & 0xff).map((d) => emulatedDevice(game.platform, d)), device: o.device }),
+    devices: () => ctl.options().then((o) => o && (ctl.p1Device = String(o.device), {
+      list: (o.devices ?? []).filter((d) => d.id & 0xff).map((d) => emulatedDevice(game.platform, d)), device: o.device })),
     block(on) { ctl.blocked = on; },
+    // Player p (1-3) joins or leaves: the worker plugs their controller into their port or unplugs it. Theirs is the
+    // one chosen for them in this game, else player 1's (ctl.p1Device, asked the first time it's needed).
+    async plug(p, on) {
+      ctl.plugged[p] = on;
+      // one question for every player joining at once: a second request of the same type would drop the first's reply
+      // (no answer: the plain RetroPad this time, asked again next time)
+      if (on) ctl.p1Device ??= ctl.devices().then((d) => (d ? String(d.device) : ((ctl.p1Device = undefined), JOYPAD)));
+      const device = on ? (ctl.startOptions?.[deviceKey(p)] ?? await ctl.p1Device) : '';
+      if (ctl.plugged[p] === on) send(T.PLUG, { room_id: ctl.roomId, port: p, device: String(device) });
+    },
+    // Player 1's controller changed: the players who follow it (nothing chosen of their own) get it too.
+    replug() {
+      for (let p = 1; p < 4; p++) if (ctl.plugged?.[p] && !ctl.startOptions?.[deviceKey(p)]) ctl.plug(p, true);
+    },
   });
 
   status('Connessione al server di streaming…');
@@ -182,7 +230,10 @@ export function stream(game, container, status, attempt = 0, ctl = { controls: s
           // The Wii language from Opzioni (GameCube games take it too), then what was chosen for this game in the
           // in-game menu.
           ctl.baseOptions = game.platform === 'wii' || game.platform === 'ngc' ? { dolphin_language: getWiiLanguage() } : {};
-          const options = { ...ctl.baseOptions, ...ctl.startOptions };
+          // Players 2-4's controllers are plugged in when they join; only the Switch bridge needs them now (Eden
+          // reads its controllers once, at start: all four are connected there from the beginning).
+          const options = Object.fromEntries(Object.entries({ ...ctl.baseOptions, ...ctl.startOptions })
+            .filter(([k]) => game.platform === 'switch' || ![1, 2, 3].some((p) => k === deviceKey(p))));
           send(T.START, { game_name: gameName, room_id: '', player_index: 0, options });
         } else if (pc.connectionState === 'failed') status('Connessione WebRTC fallita (porta UDP 8443?).');
       };
@@ -200,6 +251,7 @@ export function stream(game, container, status, attempt = 0, ctl = { controls: s
       pc.remoteDescription ? pc.addIceCandidate(c) : remoteIce.push(c);
     } else if (t === T.START) {
       ctl.roomId = p.roomId;
+      ctl.plugged = [true, false, false, false]; // the worker starts with players 2-4 unplugged
       if (p.av) applyAv(p.av); // null when the info comes later on the data channel
       status('');
       video.play().catch(() => {
@@ -234,44 +286,90 @@ export function stream(game, container, status, attempt = 0, ctl = { controls: s
   return ctl;
 }
 
-// Player 1's 24 inputs from their mapping (ctl.controls), 0..1: each as strong as the strongest key or pad control
-// mapped to it. Returns the reader; null while blocked (the menu is open) or with no device: everything released.
+// A new controller (ctl) for stream(): the default controls, pads handed out as they come and go.
+function newCtl() {
+  const controls = streamDefaultControls();
+  const ctl = { controls, blocked: false, padIndex: [null, null, null, null], fallback: controls.players[0].device === 'keyboard' };
+  // A model from the server or the menu's Salva: the pads are handed out again (the model names them by id only).
+  ctl.setControls = (model) => {
+    Object.assign(ctl, { controls: model, fallback: false, padIndex: [null, null, null, null] });
+    assignPads(ctl);
+  };
+  assignPads(ctl);
+  addEventListener('gamepadconnected', () => assignPads(ctl, ctl.onPlayer));
+  addEventListener('gamepaddisconnected', ({ gamepad }) => {
+    const p = ctl.padIndex.indexOf(gamepad.index);
+    if (p >= 0) ctl.onPlayer?.(`Giocatore ${p + 1} disconnesso`);
+    assignPads(ctl, ctl.onPlayer);
+  });
+  return ctl;
+}
+
+// Is player p (2-4) playing: a pad of theirs connected, or the keyboard with keys of their own?
+const joined = (ctl, p) => {
+  const pl = ctl.controls.players[p];
+  return pl.device === 'keyboard' ? Object.keys(pl.keys).length > 0 : !!padOf(ctl, p);
+};
+
+// The 24 inputs of player p (default 1) from their mapping (ctl.controls), 0..1: each as strong as the strongest key or
+// pad control mapped to it. Returns the reader, read(p); null while blocked (the menu is open) or with no device:
+// everything released. Player 1's keys count with a pad too; players 2-4's only on the keyboard.
 export function inputReader(ctl) {
   const keys = new Set();
-  const mapped = (code) => Object.values(ctl.controls.players[0].keys).includes(code);
+  const counts = (pl, p) => !p || pl.device === 'keyboard';
+  const mapped = (code) => ctl.controls.players.some((pl, p) => counts(pl, p) && Object.values(pl.keys).includes(code));
   addEventListener('keydown', (e) => !ctl.blocked && mapped(e.keyCode) && (keys.add(e.keyCode), e.preventDefault()));
   addEventListener('keyup', (e) => keys.delete(e.keyCode));
-  return () => {
-    const pl = ctl.controls.players[0];
+  return (p = 0) => {
+    const pl = ctl.controls.players[p];
     if (ctl.blocked || pl.device === 'none') return null;
     const v = new Array(24).fill(0);
-    for (const [i, code] of Object.entries(pl.keys)) if (keys.has(code)) v[i] = 1;
-    const gp = pl.device.startsWith('pad:') && [...navigator.getGamepads()].find((x) => x?.id === pl.device.slice(4));
+    if (counts(pl, p)) for (const [i, code] of Object.entries(pl.keys)) if (keys.has(code)) v[i] = 1;
+    const gp = padOf(ctl, p);
     if (gp) for (const [i, label] of Object.entries(pl.pad)) v[i] = Math.max(v[i] ?? 0, strength(gp, label));
     return v;
   };
 }
 
-// Input: [buttons u16][LX][LY][RX][RY][L2][R2] i16, little-endian. Buttons are on past half way, sticks and triggers
-// keep the analog value. The channel is unreliable, so the state is re-sent every 100 ms even when nothing changes.
+// Input: [buttons u16][LX][LY][RX][RY][L2][R2] i16, little-endian, plus the port (1-3) as a 15th byte for players 2-4.
+// Buttons are on past half way, sticks and triggers keep the analog value. The channel is unreliable, so a player's
+// state is re-sent every 100 ms even when nothing changes. Players 2-4 send only while they play: joining plugs their
+// controller in (ctl.plug), leaving unplugs it after a few "all released" packets, then nothing.
 function sendInput(ctl) {
   ctl.polling = true;
   const read = inputReader(ctl);
-  let last = '', lastAt = 0;
+  const last = ['', '', '', ''], lastAt = [0, 0, 0, 0], release = [0, 0, 0, 0];
   (function poll(now) {
     requestAnimationFrame(poll);
     if (ctl.data?.readyState !== 'open') return;
-    const state = new Int16Array(7);
-    const v = read();
-    if (v) {
-      for (let bit = 0; bit < 16; bit++) if (v[bit] > 0.5) state[0] |= 1 << bit;
-      const axis = (plus, minus) => Math.round(Math.max(-1, Math.min(1, v[plus] - v[minus])) * 32767);
-      [state[1], state[2], state[3], state[4]] = [axis(16, 17), axis(18, 19), axis(20, 21), axis(22, 23)];
-      [state[5], state[6]] = [Math.round(v[12] * 32767), Math.round(v[13] * 32767)];
+    for (let p = 0; p < 4; p++) {
+      if (p) {
+        const on = !!ctl.roomId && joined(ctl, p);
+        if (ctl.plugged && on !== ctl.plugged[p]) {
+          ctl.plug(p, on);
+          release[p] = on ? 0 : 3;
+        }
+        if (!ctl.plugged?.[p] && !release[p]) continue;
+      }
+      const state = new Int16Array(p ? 8 : 7);
+      const v = release[p] ? null : read(p);
+      if (v) {
+        for (let bit = 0; bit < 16; bit++) if (v[bit] > 0.5) state[0] |= 1 << bit;
+        const axis = (plus, minus) => Math.round(Math.max(-1, Math.min(1, v[plus] - v[minus])) * 32767);
+        [state[1], state[2], state[3], state[4]] = [axis(16, 17), axis(18, 19), axis(20, 21), axis(22, 23)];
+        [state[5], state[6]] = [Math.round(v[12] * 32767), Math.round(v[13] * 32767)];
+      }
+      const bytes = new Uint8Array(state.buffer, 0, p ? 15 : 14);
+      bytes[14] = p; // players 2-4 only: player 1's packet stops at 14
+      if (release[p]) {
+        release[p]--;
+        ctl.data.send(bytes);
+        continue;
+      }
+      const key = state.join();
+      if (key === last[p] && now - lastAt[p] < 100) continue;
+      [last[p], lastAt[p]] = [key, now];
+      ctl.data.send(bytes);
     }
-    const key = state.join();
-    if (key === last && now - lastAt < 100) return;
-    [last, lastAt] = [key, now];
-    ctl.data.send(state.buffer);
   })();
 }

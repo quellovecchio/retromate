@@ -5,8 +5,11 @@
 //          namespace with the host is needed) as XRGB8888; Eden runs fullscreen on it.
 //   audio: a private PulseAudio with a null sink as the default output; Eden plays into it, a thread records its
 //          monitor into a ring buffer that retro_run drains.
-//   input: a virtual gamepad (uinput) fed from RetroPad port 0. Eden reads it through SDL; its controller settings
-//          (qt-config.ini, [Controls] player_0_*) are rewritten at every start to point at this pad.
+//   input: four virtual gamepads (uinput), one per RetroPad port. Eden reads them through SDL; its controller settings
+//          (qt-config.ini, [Controls] player_0_* to player_3_*) are rewritten at every start to point at these pads,
+//          all four connected (Eden reads them only then): a player joining mid-game just starts sending input. Each
+//          port's controller type (Pro Controller, Joy-Con...) is the device the frontend plugs in before the first
+//          retro_run, which is why Eden starts there; one plugged in later counts from the next start.
 // Everything Eden owns lives in <system>/switch (library/saves/switch): the AppImage and Eden's portable "user"
 // folder (keys, firmware, NAND with the game saves, shader cache, config). No save states: Eden doesn't expose any.
 #define _GNU_SOURCE
@@ -310,11 +313,13 @@ static const struct { unsigned retro; unsigned short code; } BUTTONS[] = {
 static const unsigned short STICKS[] = {ABS_X, ABS_Y, ABS_RX, ABS_RY};
 static const struct input_id PAD_ID = {.bustype = BUS_USB, .vendor = 0x045e, .product = 0x028e, .version = 0x0110};
 
-static int pad = -1;
-static int last_btn[NBUTTONS], last_axis[4], last_hat[2];
+#define NPADS 4
+static int pads[NPADS] = {-1, -1, -1, -1};
+static int last_btn[NPADS][NBUTTONS], last_axis[NPADS][4], last_hat[NPADS][2];
 
-static int pad_open(void) {
-    pad = open("/dev/uinput", O_WRONLY | O_NONBLOCK | O_CLOEXEC);
+// Creates player p's pad. SDL tells the identical pads apart by the order they appear in: port:p in Eden's config.
+static int pad_open(int p) {
+    int pad = open("/dev/uinput", O_WRONLY | O_NONBLOCK | O_CLOEXEC);
     if (pad < 0) {
         say(RETRO_LOG_ERROR, "no controller: can't open /dev/uinput (%s); see SERVER.md, Switch", strerror(errno));
         return 0;
@@ -335,43 +340,62 @@ static int pad_open(void) {
     if (ioctl(pad, UI_DEV_SETUP, &s) < 0 || ioctl(pad, UI_DEV_CREATE) < 0) {
         say(RETRO_LOG_ERROR, "no controller: can't create the virtual pad (%s)", strerror(errno));
         close(pad);
-        pad = -1;
         return 0;
     }
-    memset(last_btn, 0, sizeof(last_btn));
-    memset(last_axis, 0, sizeof(last_axis));
-    memset(last_hat, 0, sizeof(last_hat));
+    pads[p] = pad;
+    memset(last_btn[p], 0, sizeof(last_btn[p]));
+    memset(last_axis[p], 0, sizeof(last_axis[p]));
+    memset(last_hat[p], 0, sizeof(last_hat[p]));
     return 1;
 }
 
-static void pad_update(void) {
-    if (pad < 0) return;
+static void pad_update(unsigned p) {
+    if (pads[p] < 0) return;
     struct input_event ev[NBUTTONS + 7];
     size_t n = 0;
 #define EMIT(t, c, v) (ev[n++] = (struct input_event){.type = (t), .code = (c), .value = (v)})
     for (size_t i = 0; i < NBUTTONS; i++) {
-        int v = input_cb(0, RETRO_DEVICE_JOYPAD, 0, BUTTONS[i].retro) != 0;
-        if (v != last_btn[i]) EMIT(EV_KEY, BUTTONS[i].code, last_btn[i] = v);
+        int v = input_cb(p, RETRO_DEVICE_JOYPAD, 0, BUTTONS[i].retro) != 0;
+        if (v != last_btn[p][i]) EMIT(EV_KEY, BUTTONS[i].code, last_btn[p][i] = v);
     }
     for (unsigned i = 0; i < 4; i++) {
-        int v = input_cb(0, RETRO_DEVICE_ANALOG, i < 2 ? RETRO_DEVICE_INDEX_ANALOG_LEFT : RETRO_DEVICE_INDEX_ANALOG_RIGHT,
+        int v = input_cb(p, RETRO_DEVICE_ANALOG, i < 2 ? RETRO_DEVICE_INDEX_ANALOG_LEFT : RETRO_DEVICE_INDEX_ANALOG_RIGHT,
                          i % 2 ? RETRO_DEVICE_ID_ANALOG_Y : RETRO_DEVICE_ID_ANALOG_X);
-        if (v != last_axis[i]) EMIT(EV_ABS, STICKS[i], last_axis[i] = v);
+        if (v != last_axis[p][i]) EMIT(EV_ABS, STICKS[i], last_axis[p][i] = v);
     }
-#define BTN(id) (input_cb(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_##id) != 0)
+#define BTN(id) (input_cb(p, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_##id) != 0)
     int hat[2] = {BTN(RIGHT) - BTN(LEFT), BTN(DOWN) - BTN(UP)};
     for (int i = 0; i < 2; i++)
-        if (hat[i] != last_hat[i]) EMIT(EV_ABS, i ? ABS_HAT0Y : ABS_HAT0X, last_hat[i] = hat[i]);
+        if (hat[i] != last_hat[p][i]) EMIT(EV_ABS, i ? ABS_HAT0Y : ABS_HAT0X, last_hat[p][i] = hat[i]);
     if (!n) return;
     EMIT(EV_SYN, SYN_REPORT, 0);
-    if (write(pad, ev, n * sizeof(*ev)) < 0) say(RETRO_LOG_WARN, "virtual pad write: %s", strerror(errno));
+    if (write(pads[p], ev, n * sizeof(*ev)) < 0) say(RETRO_LOG_WARN, "virtual pad %u write: %s", p + 1, strerror(errno));
 }
 
 static void pad_close(void) {
-    if (pad < 0) return;
-    ioctl(pad, UI_DEV_DESTROY);
-    close(pad);
-    pad = -1;
+    for (int p = 0; p < NPADS; p++) {
+        if (pads[p] < 0) continue;
+        ioctl(pads[p], UI_DEV_DESTROY);
+        close(pads[p]);
+        pads[p] = -1;
+    }
+}
+
+// The controller each player's pad is in Eden, as libretro devices (RetroPad subclasses) the frontend can plug in.
+// Eden's ControllerType is the subclass number: Pro Controller 0, Joy-Con pair 1, left 2, right 3. Handheld is left
+// out: Eden keeps it on a separate player slot.
+static const struct retro_controller_description SWITCH_PADS[] = {
+    {"Pro Controller", RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 0)},
+    {"Joy-Con (coppia)", RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 1)},
+    {"Joy-Con sinistro", RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 2)},
+    {"Joy-Con destro", RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 3)},
+};
+#define NTYPES (sizeof(SWITCH_PADS) / sizeof(SWITCH_PADS[0]))
+static int pad_type[NPADS] = {-1, -1, -1, -1}; // Eden's type; -1: none plugged in, player 1's (Pro Controller for them)
+
+static int type_of(unsigned p) {
+    int t = pad_type[p] >= 0 ? pad_type[p] : pad_type[0];
+    return t >= 0 ? t : 0;
 }
 
 // ---- Eden's controller settings
@@ -405,26 +429,28 @@ static const struct { const char *key; unsigned retro; const char *hat; } CONTRO
     {"button_dright", 0, "right"},               {"button_ddown", 0, "down"},
 };
 
-// Rewrites qt-config.ini's [Controls] player_0_* (the rest of the file is Eden's): Eden reads a value only when its
-// "key\default" is false. Other players and every other setting are left as they are.
+// Rewrites qt-config.ini's [Controls] player_0_* to player_3_* (the rest of the file is Eden's): Eden reads a value
+// only when its "key\default" is false. Other players and every other setting are left as they are.
 static void write_controls(const char *ini) {
     char guid[33], dev[96], line[256];
     pad_guid(guid);
-    snprintf(dev, sizeof(dev), "engine:sdl,port:0,guid:%s", guid);
     char *ours = NULL;
     size_t ours_len = 0;
     FILE *m = open_memstream(&ours, &ours_len);
+    for (unsigned p = 0; p < NPADS; p++) {
+        snprintf(dev, sizeof(dev), "engine:sdl,port:%u,guid:%s", p, guid);
 #define SET(key, ...) (snprintf(line, sizeof(line), __VA_ARGS__), \
-                       fprintf(m, "player_0_%s=%s\nplayer_0_%s\\default=false\n", key, line, key))
-    SET("connected", "true");
-    SET("type", "0"); // Pro Controller
-    for (size_t i = 0; i < sizeof(CONTROLS) / sizeof(CONTROLS[0]); i++) {
-        if (CONTROLS[i].hat) SET(CONTROLS[i].key, "%s,hat:0,direction:%s", dev, CONTROLS[i].hat);
-        else SET(CONTROLS[i].key, "%s,button:%d", dev, sdl_button(CONTROLS[i].retro));
+                       fprintf(m, "player_%u_%s=%s\nplayer_%u_%s\\default=false\n", p, key, line, p, key))
+        SET("connected", "true");
+        SET("type", "%d", type_of(p));
+        for (size_t i = 0; i < sizeof(CONTROLS) / sizeof(CONTROLS[0]); i++) {
+            if (CONTROLS[i].hat) SET(CONTROLS[i].key, "%s,hat:0,direction:%s", dev, CONTROLS[i].hat);
+            else SET(CONTROLS[i].key, "%s,button:%d", dev, sdl_button(CONTROLS[i].retro));
+        }
+        const char *stick = "offset_x:0.000000,offset_y:0.000000,invert_x:+,invert_y:+,deadzone:0.150000,range:1.000000";
+        SET("lstick", "%s,axis_x:0,axis_y:1,%s", dev, stick);
+        SET("rstick", "%s,axis_x:2,axis_y:3,%s", dev, stick);
     }
-    const char *stick = "offset_x:0.000000,offset_y:0.000000,invert_x:+,invert_y:+,deadzone:0.150000,range:1.000000";
-    SET("lstick", "%s,axis_x:0,axis_y:1,%s", dev, stick);
-    SET("rstick", "%s,axis_x:2,axis_y:3,%s", dev, stick);
     fclose(m);
 
     char tmp[4400];
@@ -446,7 +472,8 @@ static void write_controls(const char *ini) {
             if (in_controls) fputs(ours, out), done = 1;
             continue;
         }
-        if (!(in_controls && !strncmp(l, "player_0_", 9))) fputs(l, out);
+        int ours_line = in_controls && !strncmp(l, "player_", 7) && l[7] >= '0' && l[7] < '0' + NPADS && l[8] == '_';
+        if (!ours_line) fputs(l, out);
     }
     if (!done) fprintf(out, "\n[Controls]\n%s", ours);
     free(l);
@@ -458,11 +485,17 @@ static void write_controls(const char *ini) {
 
 // ---- libretro
 
-static char eden_dir[4000];
+static char eden_dir[4000], eden_app[4300], eden_rom[PATH_MAX];
+static int eden_pending; // a game is loaded, Eden starts at the next retro_run
 
 unsigned retro_api_version(void) { return RETRO_API_VERSION; }
 
-void retro_set_environment(retro_environment_t cb) { env_cb = cb; }
+void retro_set_environment(retro_environment_t cb) {
+    env_cb = cb;
+    static const struct retro_controller_info ports[NPADS + 1] = {
+        {SWITCH_PADS, NTYPES}, {SWITCH_PADS, NTYPES}, {SWITCH_PADS, NTYPES}, {SWITCH_PADS, NTYPES}, {NULL, 0}};
+    cb(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, (void *)ports);
+}
 void retro_set_video_refresh(retro_video_refresh_t cb) { video_cb = cb; }
 void retro_set_audio_sample(retro_audio_sample_t cb) { (void)cb; }
 void retro_set_audio_sample_batch(retro_audio_sample_batch_t cb) { audio_cb = cb; }
@@ -510,6 +543,7 @@ static int find_appimage(char *out, size_t size) {
 }
 
 void retro_unload_game(void) {
+    eden_pending = 0;
     stop(&eden_pid, "Eden");
     audio_stop();
     pad_close();
@@ -535,37 +569,42 @@ bool retro_load_game(const struct retro_game_info *game) {
     mkdir(path, 0755);
     snprintf(path, sizeof(path), "%s/user/config", eden_dir);
     mkdir(path, 0755);
-    snprintf(path, sizeof(path), "%s/user/config/qt-config.ini", eden_dir);
-    write_controls(path);
 
     // cloud-game's path is relative to the worker's directory, and Eden runs in eden_dir
-    char rom[PATH_MAX];
-    if (!realpath(game->path, rom)) {
+    if (!realpath(game->path, eden_rom)) {
         say(RETRO_LOG_ERROR, "can't find %s: %s", game->path, strerror(errno));
         return false;
     }
+    snprintf(eden_app, sizeof(eden_app), "%s", appimage);
 
     if (!x_open()) return false;
-    pad_open(); // before Eden starts: SDL enumerates pads at boot
+    for (int p = 0; p < NPADS; p++) pad_open(p); // before Eden starts: SDL enumerates pads at boot
     audio_start();
+    for (int p = 0; p < NPADS; p++) pad_type[p] = -1;
+    eden_pending = 1; // at the first retro_run, once the frontend has plugged in each port's controller
+    return true;
+}
+
+// Writes Eden's controller settings and starts it.
+static void eden_start(void) {
+    char ini[4300];
+    snprintf(ini, sizeof(ini), "%s/user/config/qt-config.ini", eden_dir);
+    write_controls(ini);
     // AppImages normally mount themselves with FUSE, which containers lack: unpack instead (kept in /tmp afterwards,
     // so only the first start after a container restart waits for it)
-    char *argv[] = {appimage, "-f", "-g", rom, NULL};
+    char *argv[] = {eden_app, "-f", "-g", eden_rom, NULL};
     char *extra[] = {"APPIMAGE_EXTRACT_AND_RUN=1", "NO_CLEANUP=1", "PULSE_SERVER=unix:" PULSE_SOCKET,
                      "SDL_JOYSTICK_DISABLE_UDEV=1", "QT_QPA_PLATFORM=xcb", NULL};
     eden_pid = spawn(argv, eden_dir, extra);
-    if (!eden_pid) {
-        retro_unload_game();
-        return false;
-    }
-    say(RETRO_LOG_INFO, "started %s -f -g %s (pid %d)", appimage, rom, eden_pid);
-    return true;
+    if (eden_pid) say(RETRO_LOG_INFO, "started %s -f -g %s (pid %d)", eden_app, eden_rom, eden_pid);
+    else say(RETRO_LOG_ERROR, "can't start %s", eden_app);
 }
 
 void retro_run(void) {
     static unsigned frames;
+    if (eden_pending) eden_pending = 0, eden_start();
     poll_cb();
-    pad_update();
+    for (unsigned p = 0; p < NPADS; p++) pad_update(p);
     if (eden_pid && frames++ % (FPS / 2) == 0) x_fit(); // Eden opens new windows (dialogs, the game's) as it goes
     video_cb(x_grab() ? frame : NULL, scr_w, scr_h, scr_w * 4); // NULL: the last frame again
     audio_push();
@@ -577,7 +616,15 @@ void retro_run(void) {
 }
 
 void retro_reset(void) {}
-void retro_set_controller_port_device(unsigned port, unsigned device) { (void)port, (void)device; }
+// The frontend plugs in a controller type (SWITCH_PADS); anything else (the plain RetroPad, or none when a player
+// leaves) keeps what the port has: all four stay connected in Eden.
+void retro_set_controller_port_device(unsigned port, unsigned device) {
+    for (int t = 0; t < (int)NTYPES; t++) {
+        if (port >= NPADS || SWITCH_PADS[t].id != device) continue;
+        if (eden_pid) say(RETRO_LOG_INFO, "player %u: %s from the next start", port + 1, SWITCH_PADS[t].desc);
+        else pad_type[port] = t;
+    }
+}
 size_t retro_serialize_size(void) { return 0; }
 bool retro_serialize(void *data, size_t size) { return (void)data, (void)size, false; }
 bool retro_unserialize(const void *data, size_t size) { return (void)data, (void)size, false; }
@@ -612,8 +659,13 @@ int main(void) {
     const char *ini = "/tmp/eden-bridge-test.ini";
     FILE *f = fopen(ini, "w");
     fputs("[UI]\nfullscreen=true\n[Controls]\nplayer_0_button_a=engine:keyboard,code:67\n"
-          "player_0_button_a\\default=true\nplayer_1_connected=false\n[Audio]\noutput_engine=auto\n", f);
+          "player_0_button_a\\default=true\nplayer_1_connected=false\nplayer_4_connected=false\n[Audio]\n"
+          "output_engine=auto\n", f);
     fclose(f);
+    // player 1 a left Joy-Con, player 3 a pair, player 2 and 4 nothing plugged in: player 1's
+    retro_set_controller_port_device(0, RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 2));
+    retro_set_controller_port_device(2, RETRO_DEVICE_SUBCLASS(RETRO_DEVICE_JOYPAD, 1));
+    retro_set_controller_port_device(3, RETRO_DEVICE_NONE);
     write_controls(ini);
     write_controls(ini); // a second start must not add a second copy
     char *text = NULL;
@@ -626,8 +678,13 @@ int main(void) {
                         "player_0_button_a\\default=false\n"));
     assert(strstr(text, "player_0_button_dup=engine:sdl,port:0,guid:030000005e0400008e02000010010000,hat:0,direction:up"));
     assert(!strstr(text, "engine:keyboard"));
-    assert(strstr(text, "player_1_connected=false\n[Audio]\noutput_engine=auto\n"));
-    assert(count(text, "player_0_button_a=") == 1 && count(text, "[Controls]") == 1);
+    assert(strstr(text, "player_3_button_a=engine:sdl,port:3,guid:030000005e0400008e02000010010000,button:1\n"));
+    assert(strstr(text, "player_0_type=2\n") && strstr(text, "player_1_type=2\n") && strstr(text, "player_2_type=1\n") &&
+           strstr(text, "player_3_type=2\n"));
+    assert(strstr(text, "player_1_connected=true\n") && strstr(text, "player_3_connected=true\n"));
+    assert(strstr(text, "player_4_connected=false\n[Audio]\noutput_engine=auto\n")); // not ours: left alone
+    assert(count(text, "player_0_button_a=") == 1 && count(text, "player_1_connected=") == 1);
+    assert(count(text, "[Controls]") == 1);
     free(text);
 
     unlink(ini); // no file yet (first start): the section is created

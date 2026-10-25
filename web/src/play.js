@@ -14,6 +14,7 @@ const id = params.get('id');
 let leaving; // set for browser games and the local core: flushes the in-game save to the server before the page goes
 const combos = {}; // pad shortcuts that need the running emulator (see poll below)
 let menu; // the in-game menu (ingame.js), once the game runs
+let padToasts = true; // a toast naming each pad that shows up (a streamed game names the player it goes to instead)
 // nav.js stays out of the way while a game runs: the pad and the keys are the game's (the menu unlocks it).
 document.documentElement.setAttribute('data-nav-lock', '');
 const back = async () => {
@@ -81,20 +82,25 @@ if (!res.ok) {
     }
   } else {
     // Server-side emulation: same page, a WebRTC <video> instead of EmulatorJS, and the same in-game menu.
-    const { stream, streamDefaultControls, DEVICE_KEY } = await import('./stream.js');
+    const { stream, streamDefaultControls, deviceKey } = await import('./stream.js');
+    padToasts = false; // the stream names the player a pad goes to instead
     // Core options chosen for this game in the in-game menu: they go with the start request.
     const options = await fetch(`/api/games/${game.id}/options`).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
     const ctl = stream(game, document.getElementById('game'), status);
     ctl.startOptions = options;
+    ctl.onPlayer = toast;
     const state = params.get('state');
     if (state) ctl.onPlaying = async () => (await ctl.load(state)) || toast('Stato non trovato.');
     const saved = await savedControls(game.platform, streamDefaultControls());
-    if (saved) ctl.controls = saved;
-    const adapter = streamAdapter(game, ctl, streamDefaultControls, options, DEVICE_KEY);
+    // Players 2-4's mappings are kept, not their devices: each session hands the pads out again as they show up.
+    saved?.players.forEach((p, i) => { if (i) p.device = 'none'; });
+    if (saved) ctl.setControls(saved);
+    const adapter = streamAdapter(game, ctl, streamDefaultControls, options, deviceKey);
+    const live = ctl.controls; // the menu shows the very model the pads are handed out in
     // No save states where the core can't make them (PS3, Switch): the menu hides them and Select + R does nothing.
     if (!game.states) for (const k of ['saveState', 'states', 'loadState']) delete adapter[k];
     else combos.saveState = async () => toast((await adapter.saveState()) ? 'Stato salvato.' : 'Salvataggio non riuscito.');
-    menu = ingame(adapter, saved, { variant: params.get('menu') ?? getMenuStyle() });
+    menu = ingame(adapter, live, { variant: params.get('menu') ?? getMenuStyle() });
   }
 }
 
@@ -388,7 +394,8 @@ const CATEGORY_ICONS = [[/video|graphic|render|display|screen/, 'monitor'], [/au
   [/input|control|pad/, 'game-controller'], [/hack|advanced|debug/, 'wrench'], [/system|emulation|cpu|core/, 'cpu']];
 const categoryIcon = (key) => CATEGORY_ICONS.find(([re]) => re.test(key))?.[1] ?? 'sliders-horizontal';
 
-// What the in-game menu needs from a streamed game (stream.js): one player (cloud-game gives a connection one port).
+// What the in-game menu needs from a streamed game (stream.js): four players, all on this page's connection (players
+// 2-4's packets carry their port).
 // States go to the same server folder as the browser games' ones: the worker writes the file (named here), this page
 // uploads the screenshot. Emulator options are whatever the server's libretro core declares, so any console works
 // without a list per emulator: a change applies to the running core (some only take effect at the next start, the
@@ -411,7 +418,7 @@ function streamAdapter(game, ctl, defaults, saved, deviceKey) {
   };
   return {
     game,
-    players: 1,
+    players: 4,
     pause() { shot = snap(); ctl.pause(true); },
     resume() { shot = null; ctl.pause(false); },
     block: (on) => ctl.block(on),
@@ -430,7 +437,7 @@ function streamAdapter(game, ctl, defaults, saved, deviceKey) {
     setVolume: (v) => { ctl.video.volume = v; },
     setMuted: (m) => { ctl.video.muted = m; },
     defaultControls: defaults,
-    applyControls: (m) => { ctl.controls = m; },
+    applyControls: (m) => ctl.setControls(m),
     async options() {
       const o = await ctl.options();
       if (!o) throw new Error('no options');
@@ -459,9 +466,25 @@ function streamAdapter(game, ctl, defaults, saved, deviceKey) {
       }
       await fetch(`${api}/options`, { method: 'PUT', body: '{}' });
     },
-    // The emulated controller (Wii: Wii Remote, + Nunchuk...), saved for this game like an option.
-    emulated: () => ctl.devices().then((d) => (d?.list.length > 1 ? d : null)),
-    setEmulated(id) { return this.setOption(deviceKey, String(id)); },
+    // The emulated controller (Wii: Wii Remote, + Nunchuk...), saved for this game like an option. Players 2-4 have
+    // player 1's until one is chosen for them; theirs is plugged in only while they play (ctl.plug). On the Switch
+    // Eden reads them only at start.
+    emulatedLater: game.platform === 'switch',
+    async emulated(p = 0) {
+      const d = await ctl.devices();
+      if (!(d?.list.length > 1)) return null;
+      return p ? { ...d, device: +(saved[deviceKey(p)] ?? d.device) } : d;
+    },
+    async setEmulated(id, p = 0) {
+      if (!p) {
+        await this.setOption(deviceKey(0), String(id));
+        ctl.p1Device = String(id);
+        return ctl.replug();
+      }
+      saved[deviceKey(p)] = String(id);
+      fetch(`${api}/options`, { method: 'PUT', body: JSON.stringify(saved) });
+      if (ctl.plugged?.[p]) ctl.plug(p, true);
+    },
     exit: back,
   };
 }
@@ -499,7 +522,7 @@ function playtime(gameId) {
 }
 
 // Browsers expose a gamepad only after one of its buttons is pressed on this page: say when it happens.
-addEventListener('gamepadconnected', ({ gamepad }) => toast(`🎮 ${gamepad.id}`));
+addEventListener('gamepadconnected', ({ gamepad }) => padToasts && toast(`🎮 ${gamepad.id}`));
 
 // Pad shortcuts. Home (button 16) opens and closes the in-game menu; so does Select + Start, for pads whose Home never
 // reaches the page (Chrome on Windows keeps the Xbox Guide button for itself). Keyboard: Esc. Select + R saves a state.
