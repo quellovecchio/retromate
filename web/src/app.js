@@ -1,7 +1,8 @@
-// RetroMate UI ("Vetrina"): games as real 3D boxes on a set lit in the console's color. Hash router rendering
-// HTML strings; escape user/file-derived text with esc(). Moving between pages flies the camera (View Transitions).
+// RetroMate UI ("Rivista"): a clean library with a games-magazine voice; each console is a section with its own
+// colour. Hash router rendering HTML strings; escape user/file-derived text with esc(). Moving between pages flies
+// the camera (View Transitions).
 import '@phosphor-icons/web/regular';
-import { MENU_STYLES, box, caseOf, cover, esc, getMenuStyle, playtimeText, setMenuStyle, stamp } from './box.js';
+import { MENU_STYLES, caseOf, cover, esc, getMenuStyle, playtimeText, setMenuStyle, stamp } from './box.js';
 import { FONTS, getFonts, setFonts } from './fonts.js';
 import { SKINS, getSkin, setSkin } from './skin.js';
 import './style.css';
@@ -25,33 +26,57 @@ const giochi = (n) => `${num.format(n)} ${n === 1 ? 'gioco' : 'giochi'}`; // 1 g
 
 const streamBadge = (g) => (g.runner === 'stream' ? '<span class="badge"><i class="ph ph-broadcast" aria-hidden="true"></i>streaming</span>' : '');
 
-// A game in a grid: its box, turned slightly to show the spine, squaring up when selected.
+// Each console is a section of the magazine with its page number, in the order the server lists them (load()).
+let pages = new Map();
+const pageOf = (slug) => pages.get(slug) ?? '';
+const hue = (slug) => caseOf(slug).hue;
+
+// Play time, short: "18 h", "40 min", "mai giocato".
+const shortTime = (s = 0) => (s >= 3600 ? `${Math.floor(s / 3600)} h` : s >= 60 ? `${Math.floor(s / 60)} min` : s ? '1 min' : 'mai giocato');
+// When it was last played, as the day: "oggi", "ieri", "12 nov"; and the time.
+const day = new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short' });
+const clock = new Intl.DateTimeFormat('it-IT', { hour: '2-digit', minute: '2-digit' });
+function lastDay(ts) {
+  const d = new Date(ts * 1000);
+  const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 864e5);
+  return days === 0 ? 'oggi' : days === 1 ? 'ieri' : day.format(d).replace('.', '');
+}
+
+// A flat cover at its own shape; without art, a printed card in the console's colour with the title.
+const art = (g, { lazy = true, print = false } = {}) => `
+  <span class="art${print ? ' art-print' : ''}" style="--bh:${hue(g.platform)}" aria-hidden="true">
+    <span class="cover-fallback"><span class="cover-band">${esc(g.platform_name)}</span><span>${esc(g.title)}</span></span>
+    <img src="${esc(g.cover)}" alt=""${lazy ? ' loading="lazy"' : ''} onerror="this.remove()">
+  </span>`;
+
+// A game in a shelf: the console's tab, the cover in its well, title, play time and the section page.
 const boxcard = (g, i) => `
-  <a class="boxcard" href="/play.html?id=${g.id}" data-i="${i}" data-hue="${caseOf(g.platform).hue}"${g.favorite ? ' data-fav' : ''}>
-    <span class="boxcard-stage">${box(g, { lite: true })}</span>
+  <a class="boxcard" href="/play.html?id=${g.id}" data-i="${i}" data-hue="${hue(g.platform)}" style="--bh:${hue(g.platform)}"${g.favorite ? ' data-fav' : ''}>
+    <span class="well">${art(g)}</span>
     <span class="boxcard-title">${esc(g.title)}</span>
+    <span class="boxcard-meta"><span>${caseOf(g.platform).short} · ${shortTime(g.playtime)}</span><b>${pageOf(g.platform)}</b></span>
   </a>`;
 
-// A console: a flat card with its label in the console's color; its first games fan out of the top on focus.
+// A console in the Sommario: its tab, monogram and section page; its first covers fan out of the corner on focus.
 const consoleCard = (p) => `
-  <a class="console" href="#/platform/${p.slug}" data-hue="${caseOf(p.slug).hue}" style="--bh:${caseOf(p.slug).hue};view-transition-name:plat-${p.slug}">
-    <span class="fan" aria-hidden="true">${p.games.slice(0, 3).map((g) => `<span class="fan-card">${cover(g)}</span>`).join('')}</span>
-    <span class="console-short" aria-hidden="true">${caseOf(p.slug).short}</span>
+  <a class="console" href="#/platform/${p.slug}" data-hue="${hue(p.slug)}" style="--bh:${hue(p.slug)};view-transition-name:plat-${p.slug}">
+    <span class="console-top"><span class="console-short" aria-hidden="true">${caseOf(p.slug).short}</span><span class="console-pg">${pageOf(p.slug)}</span></span>
     <span class="console-name">${esc(p.name)}</span>
     <span class="console-count">${giochi(p.count)}${p.runner === 'stream' ? ' · streaming' : ''}</span>
+    <span class="fan" aria-hidden="true">${p.games.slice(0, 3).map((g) => `<span class="fan-card">${cover(g)}</span>`).join('')}</span>
   </a>`;
 
-// A row of boxes on Home (recently played, favorites): a cover flow with a caption for the selected box.
-const flowRow = (id, label, list) => (list.length ? `
-  <section class="row" aria-labelledby="${id}">
-    <h2 id="${id}" class="row-title">${label}</h2>
-    <div class="flow" data-row>
-      ${list.map((g, i) => `
-        <a class="flow-item" href="/play.html?id=${g.id}" data-i="${i}" data-hue="${caseOf(g.platform).hue}"${g.favorite ? ' data-fav' : ''}>
-          <span class="flow-vis">${box(g, { lazy: false })}</span><span class="sr-only">${esc(g.title)}, ${esc(g.platform_name)}</span>
-        </a>`).join('')}
-    </div>
-    <div class="flow-caption" aria-hidden="true"><p class="flow-plat"></p><p class="flow-title"></p></div>
+// A console as a chip (Home's Sommario).
+const chip = (p) => `
+  <a class="chip" href="#/platform/${p.slug}" data-hue="${hue(p.slug)}" style="--bh:${hue(p.slug)}">
+    <b>${caseOf(p.slug).short}</b>${num.format(p.count)}<span class="sr-only"> ${esc(p.name)}</span>
+  </a>`;
+
+// A shelf of tiles under a heading.
+const shelf = (id, label, note, list) => (list.length ? `
+  <section class="shelf" aria-labelledby="${id}">
+    <div class="shelf-head"><h2 id="${id}" class="shelf-title">${label}</h2>${note ? `<p class="shelf-note">${note}</p>` : ''}</div>
+    <div class="covers">${list.map(boxcard).join('')}</div>
   </section>` : '');
 
 const search = (placeholder, label) => `
@@ -82,6 +107,7 @@ async function load() {
     result = { platforms, games, recent, favorites };
   }
   byId = new Map(result.games.map((g) => [g.id, g]));
+  pages = new Map(result.platforms.map((p, i) => [p.slug, `p.${String(4 + i * 8).padStart(2, '0')}`]));
   return result;
 }
 
@@ -120,26 +146,26 @@ function openModal(panel, { figure = '', labelledby, onClose } = {}) {
 const flyFrom = (from, to) => `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.height / to.height})`;
 
 
-// The game card: picking a game opens it instead of launching. Its box flies from the grid (or cover flow) into the
-// card and back when it closes; the card shows play time and the save states to start from.
+// The game card: picking a game opens it instead of launching. Its cover flies from the tile (or the cover story)
+// into the card and back when it closes; the card shows play time and the save states to start from.
 function openGame(link) {
   const g = byId.get(+new URL(link.href).searchParams.get('id'));
   if (!g) return void (location.href = link.href);
-  const src = link.querySelector('.box3d');
+  const src = link.querySelector('.art') ?? link.closest('.hero')?.querySelector('.hero-art .art');
   const play = `/play.html?id=${g.id}`;
   const stream = g.runner === 'stream' ? ' data-stream' : '';
   const { dialog } = openModal(`
-    <p class="game-plat">${esc(g.platform_name)}${streamBadge(g)}</p>
+    <p class="kick game-plat" style="--bh:${hue(g.platform)}"><b>${esc(g.platform_name)}</b>${pageOf(g.platform)}${streamBadge(g)}</p>
     <h2 id="game-title" class="game-title">${esc(g.title)}</h2>
-    <p class="game-time"><i class="ph ph-clock" aria-hidden="true"></i>${playtimeText(g.playtime)}</p>
+    <p class="game-time"><i class="ph ph-clock" aria-hidden="true"></i>${playtimeText(g.playtime)}${g.last_played ? ` · ultima partita ${lastDay(g.last_played)} alle ${clock.format(g.last_played * 1000)}` : ''}</p>
     <div class="game-plays">
-      <a class="game-play" href="${play}"${stream} autofocus><i class="ph ph-play" aria-hidden="true"></i>${g.local ? 'Gioca in streaming' : 'Gioca'}</a>
-      ${g.local ? `<a class="game-play game-play-alt" href="${play}&local"><i class="ph ph-browser" aria-hidden="true"></i>Gioca in locale</a>` : ''}
+      <a class="game-play" href="${play}"${stream} autofocus><b class="pad-btn" data-btn="ok">A</b>${g.local ? 'Gioca in streaming' : 'Gioca'}</a>
+      ${g.local ? `<a class="game-play-alt" href="${play}&local"><i class="ph ph-browser" aria-hidden="true"></i>Gioca in locale</a>` : ''}
     </div>
     <h3 id="game-states-title" class="game-states-title">Stati salvati</h3>
     <div class="game-states" role="group" aria-labelledby="game-states-title"><p class="game-note">Carico…</p></div>`,
   {
-    figure: box(g, { lazy: false }),
+    figure: art(g, { lazy: false, print: true }),
     labelledby: 'game-title',
     onClose: () => {
       const fig = dialog.querySelector('.modal-figure');
@@ -175,7 +201,7 @@ function openGame(link) {
   }, () => { list.innerHTML = '<p class="game-note">Non riesco a leggere gli stati salvati.</p>'; });
 }
 document.addEventListener('click', (e) => {
-  const link = e.target.closest?.('a.boxcard, a.flow-item');
+  const link = e.target.closest?.('a.boxcard, a.open-card');
   if (!link || e.defaultPrevented || e.button || e.ctrlKey || e.metaKey || e.shiftKey) return;
   e.preventDefault();
   openGame(link);
@@ -183,80 +209,69 @@ document.addEventListener('click', (e) => {
 
 // ---------- Pages. Each returns its markup and what to wire once it is in the page (returning the default focus).
 
-function home({ platforms, recent, favorites }) {
-  const rows = [['home-recent', 'Giocati di recente', recent], ['home-favs', 'Preferiti', favorites]].filter(([, , l]) => l.length);
+// The cover story: the last game played, its stats between rules, Gioca (straight into the game) and its card;
+// beside it the cover printed on its console's colour, with a starburst saying when you left it.
+const hero = (g) => {
+  const stream = g.runner === 'stream' ? ' data-stream' : '';
+  const when = g.last_played ? lastDay(g.last_played) : 'mai';
+  return `
+  <section class="hero" aria-labelledby="hero-title" data-hue="${hue(g.platform)}" style="--bh:${hue(g.platform)}">
+    <div class="hero-text">
+      <p class="kick">Storia di copertina <b>${esc(g.platform_name)}</b>${streamBadge(g)}</p>
+      <h2 id="hero-title" class="hero-title">${esc(g.title)}</h2>
+      <div class="stats">
+        <div><b>${g.playtime >= 60 ? shortTime(g.playtime) : '0'}</b><span>${g.playtime >= 60 ? 'giocate' : 'ore giocate'}</span></div>
+        <div><b>${when}</b><span>${g.last_played ? `alle ${clock.format(g.last_played * 1000)}` : 'giocato'}</span></div>
+        <div><b>${pageOf(g.platform)}</b><span>sezione ${caseOf(g.platform).short}</span></div>
+      </div>
+      <div class="btns">
+        <a class="game-play" href="/play.html?id=${g.id}"${stream}${g.favorite ? ' data-fav' : ''}><b class="pad-btn" data-btn="ok">A</b>Gioca</a>
+        <a class="game-play-alt open-card" href="/play.html?id=${g.id}"${g.favorite ? ' data-fav' : ''}><i class="ph ph-cards" aria-hidden="true"></i>Stati salvati e dettagli</a>
+      </div>
+    </div>
+    <div class="hero-art halftone" aria-hidden="true">
+      ${art(g, { lazy: false, print: true })}
+      ${g.last_played ? `<span class="burst"><span>Riprendi<b>${when}</b></span></span>` : ''}
+      <span class="pg">${pageOf(g.platform)} · ${caseOf(g.platform).short}</span>
+    </div>
+  </section>`;
+};
+
+function home({ platforms, games, recent, favorites }) {
+  const [lead, ...rest] = recent;
   const html = `
   <section aria-labelledby="home-title">
     <h1 id="home-title" class="sr-only">RetroMate</h1>
-    ${rows.length ? rows.map((row) => flowRow(...row)).join('')
-    : empty('game-controller', 'Nessun gioco avviato finora.', 'Scegli una console qui sotto e premi A su un gioco.')}
-    <section aria-labelledby="home-consoles">
-      <h2 id="home-consoles" class="sr-only">Console</h2>
-      ${platforms.length ? `<div class="strip-row">${platforms.map(consoleCard).join('')}</div>`
+    ${lead ? hero(lead) : empty('game-controller', 'Nessun gioco avviato finora.', 'Scegli una console qui sotto e premi A su un gioco.')}
+    ${shelf('home-recent', 'Giocati di recente', `${giochi(games.length)} in ${platforms.length} console`, rest.slice(0, 7))}
+    ${shelf('home-favs', 'Preferiti', '', favorites)}
+    <nav class="toc" aria-labelledby="home-consoles">
+      <h2 id="home-consoles" class="toc-title">Sommario</h2>
+      ${platforms.length ? platforms.map(chip).join('')
         : empty('folder-open', 'Nessun gioco nella libreria.', 'Aggiungi le ROM in <code>library/roms/&lt;console&gt;/</code>.')}
-    </section>
+    </nav>
   </section>`;
-  // Cover flow: the selected box faces you; the others stand turned at one shared depth and angle, spaced from
-  // the box height so their spines line up like a shelf. Each link is a fixed slot in order (what nav.js
-  // measures); only its .flow-vis moves, so a held D-pad never measures a box mid-flight.
-  const coverFlow = (flow, list) => {
-    const items = [...flow.querySelectorAll('.flow-item')];
-    const plat = flow.nextElementSibling.querySelector('.flow-plat');
-    const title = flow.nextElementSibling.querySelector('.flow-title');
-    let current = 0;
-    const arrange = () => {
-      const h = flow.offsetHeight - 80; // = --fh, the box height
-      const k = innerWidth < 760 ? 0.62 : 1;
-      items.forEach((el, i) => {
-        const o = i - current;
-        const s = Math.sign(o);
-        el.toggleAttribute('data-current', o === 0);
-        el.style.setProperty('--x', `${Math.round(o === 0 ? 0 : s * k * h * (0.7 + (Math.abs(o) - 1) * 0.3))}px`);
-        el.style.setProperty('--z', `${Math.round(o === 0 ? h * 0.22 : -h * 0.5)}px`);
-        el.style.setProperty('--ry', `${o === 0 ? 0 : -s * 66}deg`);
-        el.style.setProperty('--zi', 100 - Math.abs(o));
-        el.firstElementChild.style.visibility = Math.abs(o) > 6 ? 'hidden' : ''; // the slot stays focusable
-      });
-    };
-    const select = (el) => {
-      const g = list[+el.dataset.i];
-      current = +el.dataset.i;
-      arrange();
-      plat.innerHTML = esc(g.platform_name) + streamBadge(g);
-      title.textContent = g.title;
-    };
-    flow.addEventListener('focusin', (e) => select(e.target.closest('.flow-item')));
-    flow.addEventListener('click', (e) => {
-      const item = e.target.closest('.flow-item');
-      if (item && !item.hasAttribute('data-current')) { e.preventDefault(); item.focus({ preventScroll: true }); }
-    });
-    addEventListener('resize', arrange);
-    select(items[0]);
-    return () => removeEventListener('resize', arrange);
-  };
-  const init = () => {
-    const stops = [...scene.querySelectorAll('.flow')].map((flow, i) => coverFlow(flow, rows[i][2]));
-    return { first: scene.querySelector('.flow-item, .console'), stop: () => stops.forEach((stop) => stop()) };
-  };
+  const init = () => ({ first: scene.querySelector('.hero .game-play, .boxcard, .chip') });
   return { html, init };
 }
 
 function library({ platforms, games }) {
   const html = `
   <section aria-labelledby="lib-title">
-    <h1 id="lib-title" class="page-title">Libreria</h1>
+    <header class="page-head"><h1 id="lib-title" class="page-title">Libreria</h1><p class="page-sub">${giochi(games.length)} in ${platforms.length} console</p></header>
     ${search(`Cerca tra ${giochi(games.length)}`, 'Cerca un gioco')}
     <div class="lib-results" hidden>
       <p class="results-count" role="status"></p>
       <div class="covers" role="group" aria-label="Risultati"></div>
     </div>
-    ${platforms.length ? `<div class="lib-grid">${platforms.map(consoleCard).join('')}</div>`
+    ${platforms.length ? `<section class="lib-sommario" aria-labelledby="lib-toc"><div class="shelf-head"><h2 id="lib-toc" class="shelf-title">Sommario</h2></div>
+      <div class="lib-grid">${platforms.map(consoleCard).join('')}</div></section>`
       : empty('folder-open', 'Nessun gioco trovato.', 'Aggiungi le ROM in <code>library/roms/&lt;console&gt;/</code>.')}
   </section>`;
   const init = () => {
     const input = scene.querySelector('.search input');
     const results = scene.querySelector('.lib-results');
-    const grid = scene.querySelector('.lib-grid');
+    const grid = scene.querySelector('.lib-sommario');
     const list = results.querySelector('.covers');
     const count = results.querySelector('.results-count');
     const MAX = 60; // ponytail: first 60 matches rendered; paginate if libraries grow past a few thousand
@@ -285,16 +300,20 @@ function platform({ platforms }, slug) {
   const c = caseOf(p.slug);
   const html = `
   <section aria-labelledby="plat-title">
-    <header class="plat-head" style="--bh:${c.hue};view-transition-name:plat-${p.slug}">
+    <header class="plat-head halftone" style="--bh:${c.hue};view-transition-name:plat-${p.slug}">
       <span class="console-short" aria-hidden="true">${c.short}</span>
-      <h1 id="plat-title" class="plat-title">${esc(p.name)}</h1>
-      <span class="console-count">${giochi(p.count)}${p.runner === 'stream' ? ' · streaming' : ''}</span>
+      <div>
+        <h1 id="plat-title" class="plat-title">${esc(p.name)}</h1>
+        <p class="console-count">${giochi(p.count)}${p.runner === 'stream' ? ' · streaming' : ''}</p>
+      </div>
+      <span class="plat-pg">Sezione ${pageOf(p.slug)}</span>
     </header>
     <div class="plat-body">
-      <aside class="showcase" aria-hidden="true">
-        <div class="showcase-stage"><span class="turntable"></span></div>
+      <aside class="showcase" aria-hidden="true" style="--bh:${c.hue}">
+        <div class="showcase-stage halftone"><span class="turntable"></span></div>
         <p class="showcase-title"></p>
-        <p class="showcase-hint"><b class="pad-btn" data-btn="ok">A</b>Gioca</p>
+        <p class="showcase-meta"></p>
+        <p class="showcase-hint"><b class="pad-btn" data-btn="ok">A</b>Apri la scheda</p>
       </aside>
       <div class="plat-games">
         ${search(`Cerca tra ${giochi(p.count)}`, `Cerca in ${esc(p.name)}`)}
@@ -307,18 +326,20 @@ function platform({ platforms }, slug) {
     root.style.setProperty('--hue', c.hue);
     const turntable = scene.querySelector('.turntable');
     const title = scene.querySelector('.showcase-title');
+    const meta = scene.querySelector('.showcase-meta');
     let last = 0;
-    // The selected game's box swings in spine-first from the grid side, then turns to show the front.
+    // The selected game's cover drops onto the coloured panel like a photo laid on a page.
     const show = (g) => {
-      turntable.innerHTML = box(g, { lazy: false });
+      turntable.innerHTML = art(g, { lazy: false, print: true });
       title.textContent = g.title;
+      meta.textContent = playtimeText(g.playtime) + (g.last_played ? ` · ultima partita ${lastDay(g.last_played)}` : '');
       const now = performance.now();
-      const fast = now - last < 260; // D-pad held down: no full spin per box
+      const fast = now - last < 260; // D-pad held down: a quick swap, not a full drop per cover
       last = now;
       if (reduce()) return;
       turntable.firstElementChild.animate(
-        [{ transform: 'translateX(40%) rotateY(84deg) scale(0.82)', opacity: 0.4 }, { transform: 'none', opacity: 1 }],
-        { duration: fast ? 200 : 620, easing: getComputedStyle(root).getPropertyValue(fast ? '--ease' : '--spring').trim() },
+        [{ transform: 'translateY(-26px) rotate(-7deg) scale(0.94)', opacity: 0 }, { transform: 'none', opacity: 1 }],
+        { duration: fast ? 160 : 560, easing: getComputedStyle(root).getPropertyValue(fast ? '--ease' : '--spring').trim() },
       );
     };
     scene.querySelector('.covers').addEventListener('focusin', (e) => show(p.games[+e.target.closest('.boxcard').dataset.i]));
@@ -350,7 +371,7 @@ const toggle = (opt, title) => `
 function options() {
   const html = `
   <section aria-labelledby="opt-title">
-    <h1 id="opt-title" class="page-title">Opzioni</h1>
+    <header class="page-head"><h1 id="opt-title" class="page-title">Opzioni</h1></header>
     <div class="panel">
       <h2>Aspetto</h2>
       <p class="panel-note">La scelta vale per questo dispositivo.</p>
@@ -499,7 +520,7 @@ function notice(text) {
 }
 
 // Streamed games share one server slot: check it before leaving the page, so a busy slot is a notice here
-// instead of a dead end on the play page. (Bubbles after the cover flow's own click handler, which may cancel.)
+// instead of a dead end on the play page. (Bubbles after the game card's click handler, which cancels tiles.)
 let launching = false;
 document.addEventListener('click', async (e) => {
   const link = e.target.closest?.('a[data-stream]');
@@ -548,7 +569,7 @@ const hintA = document.querySelector('[data-hint-a]');
 const hintX = document.querySelector('[data-hint-x]');
 const isGame = (el) => el?.matches?.('[href^="/play.html"]:not(.state)');
 function hints(el) {
-  hintA.textContent = isGame(el) && !el.matches('.boxcard, .flow-item') ? 'Gioca' : isGame(el) ? 'Apri'
+  hintA.textContent = isGame(el) && !el.matches('.boxcard, .open-card') ? 'Gioca' : isGame(el) ? 'Apri'
     : el?.matches?.('.state') ? 'Riprendi' : el?.matches?.('input') ? 'Scrivi' : el?.matches?.('.font-pick, .choice') ? 'Scegli' : el?.matches?.('.toggle') ? 'Cambia' : 'Apri';
   hintX.hidden = !isGame(el);
   hintX.querySelector('[data-hint-x-label]').textContent = el?.hasAttribute?.('data-fav') ? 'Togli dai preferiti' : 'Preferito';
@@ -637,9 +658,18 @@ addEventListener('pageswap', (e) => { root.dataset.vt = 'in'; quiet(e.viewTransi
 addEventListener('pagereveal', (e) => { root.dataset.vt = 'out'; quiet(e.viewTransition); });
 draw().then((paint) => paint());
 
-// Clock and controller state in the top bar.
+// The issue line beside the logo: a weekly magazine, so this week's number and the month.
+function issue(d = new Date()) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7)); // ISO week: the Thursday of this week
+  const week = Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7);
+  return `Numero ${week}<br>${d.toLocaleDateString('it-IT', { month: 'long', year: 'numeric' })}`;
+}
+
+// Clock, issue and controller state in the top bar.
 function status() {
   document.querySelector('[data-clock]').textContent = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  document.querySelector('[data-issue]').innerHTML = issue();
   const on = [...(navigator.getGamepads?.() ?? [])].some(Boolean);
   const pad = document.querySelector('[data-pad]');
   pad.toggleAttribute('data-on', on);

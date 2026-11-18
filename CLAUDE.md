@@ -43,9 +43,9 @@ the old process alive: restart the `api` server after editing `server.py`.
   which is why saves were lost. Its Save/Load State buttons and Select+R go to the server; `?state=` starts from one.
   Play time (`games.playtime`, seconds) is sent by the play page while visible. Streamed games' states live in the
   same folders (cloud-game writes them there, zip-compressed), so the game card and `?state=` work for both runners.
-- Picking a game (grid box or current cover-flow box) opens the game card, a modal: `openModal()` in `app.js` is the
-  reusable `<dialog>` (panel animates in/out in CSS, a `figure` beside it can fly; B/Esc/outside click close it,
-  nav.js keeps focus inside an open dialog). Only the card's links launch the game.
+- Picking a game (a tile, or "Stati salvati e dettagli" on Home's cover story) opens the game card, a modal: `openModal()`
+  in `app.js` is the reusable `<dialog>` (panel animates in/out in CSS, a `figure` beside it (the cover) can fly; B/Esc/outside click close it,
+  nav.js keeps focus inside an open dialog). Only the card's links and the cover story's Gioca launch the game.
 - In game, Home (pad button 16), Select+Start or Esc opens the in-game menu, `web/src/ingame.js` + `ingame.css`: a
   `<dialog>` dashboard (command bar, game card, volume, players; panels for states, controller mapping, emulator
   options, restart/quit confirmations) that replaces EmulatorJS's own bar and menus (hidden in CSS). It is
@@ -84,7 +84,7 @@ the old process alive: restart the `api` server after editing `server.py`.
   caches ROMs in IndexedDB keyed by that segment plus size, so a constant suffix made same-size ROMs collide.
 - `web/src/nav.js` does spatial focus navigation by lines (left/right stay on the line, and at its end wrap to the next
   or previous item in the same parent, so a wrapping grid like the Libreria's consoles reads like text; up/down go to
-  the nearest line; a `[data-row]` such as the cover flow or the tabs counts as one line and is entered on its current item;
+  the nearest line; a `[data-row]` such as the tabs counts as one line and is entered on its current item;
   a `[data-col]` is the other way round, for side-by-side lists whose lines don't align (the in-game options'
   categories and options): up/down stay inside it and stop at its end, left/right leave it even with nothing level
   and land on the other column's current item; each column scrolls on its own, and moving inside one scrolls only it
@@ -98,13 +98,17 @@ the old process alive: restart the `api` server after editing `server.py`.
   pad set `data-nav-lock` on `<html>`. On a phone in a browser tab (a plain-HTTP origin installs only as a shortcut
   that opens in Chrome) any tap requests fullscreen. The UI is a hash router in `web/src/app.js` rendering HTML strings; escape
   user/file-derived text with `esc()`. Routes: `#/options`, `#/`, `#/library`, `#/platform/{slug}`.
-- Design system "Vetrina": rules in `DESIGN.md`, tokens and components in `web/src/style.css`. Games are 3D boxes at
-  their console's real packaging size (`CASES` in `app.js`) until the cover loads, then at the cover's ratio. Font pairings live in `web/src/fonts.js` (self-hosted,
-  chosen in Opzioni, per device). Skins too (`web/src/skin.js`, per device): `vetrina` is the CSS set; every other
+- Design system "Rivista": rules in `DESIGN.md`, tokens and components in `web/src/style.css`. White paper, a games
+  magazine's voice: Home opens on the cover story (the last game played), games are tiles with their console's colour
+  as a section tab and flat covers, each console has a section page number (`pageOf` in `app.js`). A console's colour
+  comes from an inline `--bh` (`--sec`/`--sec-deep` are re-declared there: declared on `:root` they'd freeze the
+  default hue). The in-game menu is the one place games are still 3D boxes at real packaging size (`CASES` in `box.js`). Font pairings live in `web/src/fonts.js` (self-hosted,
+  chosen in Opzioni, per device). Skins too (`web/src/skin.js`, per device): `rivista` is the CSS set; every other
   skin draws the backdrop in WebGL2 (a field shader into a texture at `scale`, then a post pass: grain, ASCII, CRT,
   Game Boy dithering or a copy), tinted by `--hue` (`uFocus` gives the focused element's position). While it runs,
-  `<html data-chrome>` lists the CSS to apply (`glass`, `light` for the two light skins, plus each skin's own); without
-  WebGL2 nothing is set and the page stays Vetrina. Never style on `[data-skin]` alone: the Opzioni pills carry it too.
+  `<html data-chrome>` lists the CSS to apply (`glass`, `light` for the two light skins, plus each skin's own); every dark skin prints the pages in
+  white ink on smoked cards (the "night edition" tokens in style.css); without WebGL2 nothing is set and the page stays
+  Rivista. The play page resets the tokens to dark (`body.play`). Never style on `[data-skin]` alone: the Opzioni pills carry it too.
   Cover duotones (Game Boy, Blueprint) are SVG filters skin.js injects; `box()` writes `data-mm` for Blueprint. `web/src/padtype.js` is the gamepad keyboard that opens on text fields.
 - Dev only: `?data=worst|one|empty|huge` (e.g. `http://localhost:5173/?data=worst#/`) swaps the API data for the
   stress fixtures in `web/src/dev/fixtures.js`; they never ship in the build.

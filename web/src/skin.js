@@ -1,5 +1,5 @@
-// Skins, chosen in Opzioni and remembered per device like the fonts. Every skin but Vetrina replaces the set's
-// gradients with a live WebGL2 backdrop, drawn in two passes: a field (into a texture, at `scale` of the canvas) and a
+// Skins, chosen in Opzioni and remembered per device like the fonts. Every skin but Rivista replaces the white page
+// with a live WebGL2 backdrop, drawn in two passes: a field (into a texture, at `scale` of the canvas) and a
 // post pass onto the canvas. Fields are tinted with the hue of whatever has focus, except where a skin's palette is
 // the point (Synthwave, Game Boy, Blueprint). Aurora, Terminale, Prisma and Eco are OpenShaders' folded light ribbons
 // with their authors' constants: @elsoghiar, @dolza, @isuru and @voidy (openshaders.com). The rest are ours.
@@ -455,7 +455,7 @@ void main() {
 
 // [id, name, what it looks like, {field, post, scale, chrome} or nothing for the CSS set]
 export const SKINS = [
-  ['vetrina', 'Vetrina', 'Un set fotografico in penombra, illuminato nel colore della console.'],
+  ['rivista', 'Rivista', 'Carta bianca e inchiostro nero, ogni console con il suo colore di sezione.'],
   ['aurora', 'Aurora', 'Nastri di luce animati con grana da pellicola, vetro scuro e bordi luminosi.', {
     scale: 0.5,
     chrome: 'glass',
@@ -670,7 +670,7 @@ document.body.insertAdjacentHTML('beforeend', `
   </svg>`);
 
 // data-skin names the skin; data-chrome is set only while its backdrop runs (without WebGL2 the page keeps the
-// Vetrina look whole).
+// Rivista look whole).
 let stop = null;
 function apply(id) {
   const root = document.documentElement;

@@ -9,7 +9,7 @@ import '@fontsource-variable/funnel-sans';
 import '@fontsource-variable/rubik';
 
 export const FONTS = [
-  ['archivo', 'Archivo Expanded + Archivo'],
+  ['archivo', 'Archivo Condensed + Archivo'],
   ['gabarito', 'Gabarito'],
   ['redhat', 'Red Hat Display + Red Hat Text'],
   ['funnel', 'Funnel Display + Funnel Sans'],

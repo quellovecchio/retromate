@@ -1,0 +1,669 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RetroMate: tre redesign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Barlow+Condensed:wght@600;800&family=Barlow:wght@500;700&family=Zen+Kaku+Gothic+New:wght@500;700;900&family=JetBrains+Mono:wght@500;700&family=Courier+Prime:wght@400;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400..700;1,8..60,400&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: #0b0b0d; color: #fff; font-family: Archivo, system-ui, sans-serif; overflow: hidden; }
+img { display: block; }
+
+/* switcher */
+.switch { height: 56px; display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; justify-content: center; }
+.switch button { font: 700 14px Archivo, sans-serif; color: #fff; background: rgb(255 255 255 / .1); border: 0; border-radius: 999px; height: 36px; padding: 0 14px; white-space: nowrap; cursor: pointer; }
+.switch button[aria-pressed=true] { background: #fff; color: #111; }
+.switch small { color: rgb(255 255 255 / .55); font-size: 13px; margin-left: 14px; }
+.viewport { position: absolute; top: 56px; left: 0; right: 0; bottom: 0; display: grid; place-items: center; }
+.stage { width: 1600px; height: 900px; position: relative; overflow: hidden; transform-origin: center; flex: none; }
+.mock { position: absolute; inset: 0; display: none; }
+.mock.on { display: block; }
+
+/* ====================== 1. RIVISTA ====================== */
+.riv { background: #111; font-family: Archivo, sans-serif; }
+.riv .mast { position: absolute; left: 0; right: 0; top: 0; height: 112px; background: #fbfbf8; color: #111; display: flex; align-items: center; padding: 0 48px; gap: 28px; }
+.riv .logo { font-weight: 900; font-stretch: 125%; font-size: 64px; letter-spacing: -.02em; line-height: 1; }
+.riv .logo b { color: #e6007e; }
+.riv .issue { font-weight: 800; font-size: 15px; text-transform: uppercase; border-left: 3px solid #111; padding-left: 14px; line-height: 1.25; }
+.riv .tabs { margin-left: auto; display: flex; gap: 0; height: 112px; align-items: stretch; }
+.riv .tabs span { display: flex; align-items: center; padding: 0 26px; font-weight: 900; font-stretch: 75%; font-size: 26px; text-transform: uppercase; border-left: 3px solid #111; }
+.riv .tabs span.cur { background: #111; color: #fbfbf8; }
+.riv .clock { font-weight: 800; font-size: 22px; font-variant-numeric: tabular-nums; padding-left: 26px; border-left: 3px solid #111; display: flex; align-items: center; gap: 10px; }
+.riv .cover { position: absolute; left: 0; top: 112px; width: 1040px; height: 600px; background: #e6007e; overflow: hidden; }
+.riv .cover::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(rgb(0 0 0 / .14) 1.4px, transparent 1.6px); background-size: 9px 9px; }
+.riv .kicker { position: absolute; left: 48px; top: 40px; background: #111; color: #fff; font-weight: 900; font-size: 18px; text-transform: uppercase; padding: 8px 14px; letter-spacing: .04em; }
+.riv .headline { position: absolute; left: 48px; top: 96px; width: 600px; font-weight: 900; font-stretch: 62%; text-transform: uppercase; line-height: .86; font-size: 92px; white-space: nowrap; color: #fff; letter-spacing: -.01em; }
+.riv .headline small { display: block; font-size: 42px; font-stretch: 100%; line-height: 1; margin-bottom: 6px; color: #111; }
+.riv .art { position: absolute; right: 52px; top: 46px; width: 320px; transform: rotate(4deg); box-shadow: -14px 14px 0 #111; border: 8px solid #fbfbf8; }
+.riv .burst { position: absolute; right: 360px; top: 380px; width: 190px; height: 190px; background: #ffe14d; color: #111; display: grid; place-items: center; text-align: center; font-weight: 900; font-stretch: 75%; text-transform: uppercase; font-size: 24px; line-height: .95; transform: rotate(-12deg);
+  clip-path: polygon(50% 0,59% 13%,74% 5%,76% 21%,92% 19%,86% 34%,100% 42%,88% 52%,98% 66%,82% 70%,84% 86%,68% 82%,60% 98%,50% 86%,40% 98%,32% 82%,16% 86%,18% 70%,2% 66%,12% 52%,0 42%,14% 34%,8% 19%,24% 21%,26% 5%,41% 13%); }
+.riv .burst b { font-size: 46px; display: block; }
+.riv .stats { position: absolute; left: 48px; bottom: 132px; display: flex; gap: 0; }
+.riv .stats div { padding-right: 28px; margin-right: 28px; border-right: 3px solid #111; }
+.riv .stats div:last-child { border: 0; }
+.riv .stats b { display: block; font-weight: 900; font-stretch: 62%; font-size: 64px; line-height: .9; }
+.riv .stats span { font-weight: 800; font-size: 16px; text-transform: uppercase; color: #111; }
+.riv .play { position: absolute; left: 48px; bottom: 40px; height: 66px; padding: 0 30px 0 14px; display: flex; align-items: center; gap: 14px; background: #ffe14d; color: #111; font-weight: 900; font-size: 28px; text-transform: uppercase; font-stretch: 85%;
+  box-shadow: 0 0 0 4px #111, 0 0 0 9px #fff, -8px 8px 0 9px #111; }
+.glyph { width: 40px; height: 40px; border-radius: 50%; display: inline-grid; place-items: center; font-weight: 900; font-size: 19px; background: #111; color: #ffe14d; flex: none; }
+.riv .play + .alt { position: absolute; left: 330px; bottom: 52px; font-weight: 800; font-size: 18px; text-transform: uppercase; display: flex; gap: 10px; align-items: center; color: #111; }
+.riv .alt .glyph { background: #fbfbf8; color: #111; width: 34px; height: 34px; font-size: 16px; }
+.riv .toc { position: absolute; left: 1040px; right: 0; top: 112px; height: 600px; background: #111; padding: 34px 44px; }
+.riv .toc h2 { font-weight: 900; font-stretch: 110%; font-size: 34px; text-transform: uppercase; letter-spacing: -.01em; display: flex; justify-content: space-between; align-items: baseline; border-bottom: 3px solid #fbfbf8; padding-bottom: 12px; }
+.riv .toc h2 small { white-space: nowrap; font-size: 15px; font-stretch: 100%; font-weight: 800; color: rgb(255 255 255 / .7); }
+.riv .row { display: grid; grid-template-columns: 10px 76px 1fr 50px 34px; white-space: nowrap; align-items: center; gap: 14px; height: 70px; border-bottom: 1px solid rgb(255 255 255 / .22); font-size: 17px; font-weight: 800; text-transform: uppercase; }
+.riv .row i { height: 46px; }
+.riv .row .ab { font-weight: 900; font-stretch: 62%; font-size: 40px; line-height: 1; }
+.riv .row .nm { color: rgb(255 255 255 / .82); display: flex; gap: 10px; align-items: center; }
+.riv .row .pg { font-variant-numeric: tabular-nums; text-align: right; }
+.riv .row .ct { text-align: right; font-variant-numeric: tabular-nums; color: rgb(255 255 255 / .7); }
+.riv .tag { font-size: 12px; font-weight: 900; padding: 3px 7px; background: #fbfbf8; color: #111; letter-spacing: .04em; }
+.riv .tag.new { background: #e6007e; color: #fff; }
+.riv .recent { position: absolute; left: 0; right: 0; top: 712px; bottom: 0; background: #00a0e3; padding: 22px 48px; display: flex; gap: 26px; align-items: flex-end; }
+.riv .recent h3 { position: absolute; left: 48px; top: 18px; font-weight: 900; font-stretch: 75%; font-size: 24px; text-transform: uppercase; color: #111; }
+.riv .thumb { display: flex; gap: 14px; align-items: flex-end; width: 236px; }
+.riv .thumb img { height: 118px; max-width: 100px; object-fit: contain; border: 4px solid #fbfbf8; box-shadow: -5px 5px 0 #111; }
+.riv .thumb p { font-weight: 800; font-size: 15px; line-height: 1.15; color: #111; text-transform: uppercase; }
+.riv .thumb p small { display: block; font-weight: 900; font-size: 13px; }
+.riv .legend { position: absolute; right: 40px; bottom: 26px; display: flex; gap: 18px; background: #111; padding: 10px 18px; font-weight: 800; font-size: 16px; text-transform: uppercase; }
+.riv .legend span { display: flex; gap: 8px; align-items: center; }
+.riv .legend .glyph { width: 30px; height: 30px; font-size: 14px; background: #ffe14d; color: #111; }
+.riv .legend .glyph.w { background: #fbfbf8; }
+
+/* ====================== 2. VIDEOTECA ====================== */
+.vid { background: radial-gradient(ellipse 120% 60% at 50% -10%, #2a3a44 0%, #10161c 60%), #10161c; font-family: Barlow, sans-serif; }
+.vid::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: repeating-linear-gradient(90deg, transparent 0 199px, rgb(255 255 255 / .02) 199px 200px); }
+.vid .tube { position: absolute; top: 0; height: 8px; width: 420px; background: #f4f7ff; border-radius: 0 0 6px 6px; box-shadow: 0 0 40px 16px rgb(200 230 255 / .35), 0 0 120px 40px rgb(160 210 255 / .12); }
+.vid .top { position: absolute; left: 48px; right: 48px; top: 30px; height: 64px; display: flex; align-items: center; gap: 16px; }
+.vid .sign-logo { background: #d7262f; color: #fff; font: 800 38px "Barlow Condensed", sans-serif; text-transform: uppercase; padding: 4px 18px 2px; letter-spacing: .02em; box-shadow: inset 0 0 0 3px #fff, 0 6px 0 #7d1218; border-radius: 4px; }
+.vid .nav { display: flex; gap: 8px; margin-left: 28px; }
+.vid .nav span { height: 46px; padding: 0 20px; display: flex; align-items: center; border-radius: 4px; font: 800 22px "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .03em; background: rgb(255 255 255 / .08); }
+.vid .nav span.cur { background: #f4f7ff; color: #10161c; }
+.vid .clock { margin-left: auto; font: 800 26px "Barlow Condensed", sans-serif; }
+.vid .hang { position: absolute; display: flex; flex-direction: column; align-items: center; }
+.vid .hang::before { content: ""; width: 70%; height: 26px; border-left: 2px solid #9aa6ad; border-right: 2px solid #9aa6ad; }
+.vid .hang div { background: #f4f7ff; color: #10161c; font: 800 30px "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .04em; padding: 6px 26px 4px; border-radius: 4px; box-shadow: inset 0 0 0 3px #d7262f, 0 8px 18px rgb(0 0 0 / .4); }
+.vid .hang div small { font-size: 20px; color: #d7262f; margin-left: 10px; }
+.vid .rack { position: absolute; display: flex; align-items: flex-end; gap: 26px; padding: 0 30px; }
+.vid .rack::after { content: ""; position: absolute; left: 0; right: 0; bottom: -14px; height: 14px; background: linear-gradient(#f3f6f8, #8e9aa2 45%, #4b555c); border-radius: 3px; box-shadow: 0 18px 30px rgb(0 0 0 / .55); }
+.vid .rack::before { content: ""; position: absolute; left: 0; right: 0; bottom: 40px; height: 4px; background: linear-gradient(#e2e8ec, #6f7b82); opacity: .85; z-index: 2; }
+.vid .case { position: relative; height: 210px; flex: none; }
+.vid .case img { height: 100%; width: auto; box-shadow: 4px 0 0 #0a0d10, 0 0 0 1px rgb(0 0 0 / .4); }
+.vid .case.focus { transform: translateY(-12px) scale(1.08); z-index: 3; transform-origin: bottom center; }
+.vid .case.focus img { box-shadow: 0 0 0 4px #10161c, 0 0 0 9px #fff, 0 30px 50px rgb(0 0 0 / .6); }
+.vid .sticker { position: absolute; right: -14px; top: 14px; background: #ff8a00; color: #10161c; font: 700 18px "Courier Prime", monospace; padding: 5px 9px; border-radius: 3px; transform: rotate(8deg); box-shadow: 0 2px 0 rgb(0 0 0 / .35); }
+.vid .title { position: absolute; left: 48px; top: 474px; font: 800 44px "Barlow Condensed", sans-serif; text-transform: uppercase; letter-spacing: .01em; }
+.vid .title small { display: block; font: 700 18px Barlow, sans-serif; color: #ff8a00; text-transform: uppercase; letter-spacing: .08em; }
+.vid .title span { font: 700 20px Barlow, sans-serif; color: rgb(244 247 255 / .75); text-transform: none; margin-left: 14px; letter-spacing: 0; }
+.vid .aisle { position: absolute; top: 560px; width: 430px; }
+.vid .aisle .rack { overflow: hidden; padding-top: 8px; }
+.vid .aisle .rack::after, .vid .aisle .rack::before { display: none; }
+.vid .aisle .rack { border-bottom: 14px solid #8e9aa2; border-image: linear-gradient(#f3f6f8, #8e9aa2 45%, #4b555c) 1; }
+.vid .aisle .hang div { background: #0f5e66; color: #f4f7ff; font-size: 26px; box-shadow: inset 0 0 0 3px #f4f7ff, 0 8px 18px rgb(0 0 0 / .4); }
+.vid .aisle .hang div small { color: #ffd9a8; }
+.vid .aisle .hang { position: relative; }
+.vid .aisle .rack { position: relative; margin-top: 18px; gap: 16px; padding: 0 22px; justify-content: center; }
+.vid .aisle .case { height: 128px; }
+.vid .tagS { font: 700 14px Barlow, sans-serif; background: #d7262f; color: #fff; padding: 2px 8px; border-radius: 3px; margin-left: 10px; letter-spacing: .06em; vertical-align: 4px; }
+.vid .receipt { position: absolute; right: 30px; bottom: 0; width: 180px; font-size: 14px !important; background: #f4f7ff; color: #10161c; font: 700 17px "Courier Prime", monospace; padding: 14px 18px 26px; transform: rotate(-2deg); transform-origin: bottom right;
+  -webkit-mask: linear-gradient(#000 0 0) top/100% calc(100% - 10px) no-repeat, conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom/16px 10px repeat-x; }
+.vid .receipt hr { border: 0; border-top: 2px dashed #10161c; margin: 6px 0 8px; }
+.vid .receipt p { display: flex; justify-content: space-between; line-height: 1.55; }
+
+/* ====================== 3. CATALOGO ====================== */
+.cat { background-color: #d9d6cc; color: #1a1a1a; font-family: "Zen Kaku Gothic New", sans-serif;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .13 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
+.cat .top { position: absolute; left: 40px; right: 40px; top: 26px; height: 70px; display: flex; align-items: center; gap: 22px; border-bottom: 4px solid #1a1a1a; }
+.cat .logo { font-weight: 900; font-size: 46px; letter-spacing: -.03em; }
+.cat .vol { font: 700 14px "JetBrains Mono", monospace; line-height: 1.3; border-left: 2px solid #1a1a1a; padding-left: 12px; }
+.cat .nav { display: flex; gap: 6px; margin-left: 18px; }
+.cat .nav span { font-weight: 900; font-size: 21px; padding: 6px 16px; border: 2px solid #1a1a1a; }
+.cat .nav span.cur { background: #1a1a1a; color: #d9d6cc; }
+.cat .search { margin-left: auto; width: 330px; height: 46px; border: 2px solid #1a1a1a; display: flex; align-items: center; gap: 10px; padding: 0 14px; font-weight: 700; font-size: 17px; color: #5a574f; }
+.cat .clock { font: 700 22px "JetBrains Mono", monospace; }
+.cat .map { position: absolute; left: 40px; top: 122px; width: 470px; }
+.cat .map h2, .cat .grid h2 { font-weight: 900; font-size: 20px; display: flex; justify-content: space-between; border-bottom: 2px solid #1a1a1a; padding-bottom: 6px; margin-bottom: 14px; }
+.cat h2 small { font: 700 14px "JetBrains Mono", monospace; }
+.cat .halls { display: grid; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(8, 62px); gap: 6px; border: 3px solid #1a1a1a; padding: 6px; position: relative; }
+.cat .hall { padding: 8px 10px; display: flex; flex-direction: column; justify-content: space-between; color: #fff; mix-blend-mode: multiply; position: relative; }
+.cat .hall b { font-weight: 900; font-size: 26px; line-height: 1; color: #1a1a1a; mix-blend-mode: normal; }
+.cat .hall span { font: 700 13px "JetBrains Mono", monospace; color: #1a1a1a; }
+.cat .entrance { grid-column: 1 / -1; border: 2px dashed #1a1a1a; display: flex; align-items: center; justify-content: center; font: 700 13px "JetBrains Mono", monospace; letter-spacing: .1em; }
+.cat .here { position: absolute; font: 700 22px "Zen Kaku Gothic New"; color: #1f3fbf; transform: rotate(-6deg); }
+.cat .legendmap { margin-top: 14px; font: 700 13px "JetBrains Mono", monospace; line-height: 1.7; }
+.cat .grid { position: absolute; left: 548px; right: 40px; top: 122px; }
+.cat .cells { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 8px 8px; }
+.cat .cell { position: relative; border: 1.5px solid #1a1a1a; background: #d9d6cc; padding: 4px 4px 3px; }
+.cat .cell .im { height: 82px; display: grid; place-items: center; overflow: hidden; background: #cfccc1; }
+.cat .cell img { max-height: 82px; max-width: 100%; filter: grayscale(1) contrast(1.15) brightness(1.05); mix-blend-mode: multiply; }
+.cat .cell p { font: 700 10.5px "JetBrains Mono", monospace; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat .cell .star { position: absolute; right: -9px; top: -11px; width: 30px; }
+.cat .cell.played p::after { content: ""; position: absolute; left: 4px; right: 4px; bottom: 9px; border-top: 2px solid #1f3fbf; transform: rotate(-3deg); }
+.cat .loop { position: absolute; pointer-events: none; }
+.cat .zoom { position: absolute; width: 470px; background: #f1efe8; border: 3px solid #1a1a1a; box-shadow: -10px 10px 0 #1a1a1a; padding: 18px; display: grid; grid-template-columns: 170px 1fr; gap: 18px; }
+.cat .zoom img { width: 170px; }
+.cat .zoom .code { font: 700 14px "JetBrains Mono", monospace; background: #7b4fd6; color: #fff; display: inline-block; padding: 2px 8px; }
+.cat .zoom h3 { font-weight: 900; font-size: 30px; line-height: 1.05; margin: 10px 0 12px; }
+.cat .zoom dl { font: 700 14px "JetBrains Mono", monospace; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin-bottom: 16px; }
+.cat .zoom dt { color: #6a675f; }
+.cat .zoom .btn { height: 52px; background: #ffe14d; display: inline-flex; align-items: center; gap: 10px; padding: 0 20px 0 8px; font-weight: 900; font-size: 22px; box-shadow: 0 0 0 3px #1a1a1a, 0 0 0 7px #1f3fbf; }
+.cat .legend { position: absolute; right: 40px; bottom: 22px; display: flex; gap: 18px; font-weight: 900; font-size: 16px; border: 2px solid #1a1a1a; padding: 8px 14px; background: #d9d6cc; }
+.cat .legend span { display: flex; gap: 8px; align-items: center; }
+.cat .legend .glyph { width: 28px; height: 28px; font-size: 13px; background: #1a1a1a; color: #ffe14d; }
+.cat .legend .glyph.w { color: #d9d6cc; }
+/* ====================== 4. TABELLONE ====================== */
+.flap { background: repeating-linear-gradient(90deg, #7d8186 0 2px, #6c7075 2px 3px, #74787d 3px 5px), #72767b; font-family: "Barlow Condensed", sans-serif; color: #f2f2f2; }
+.flap .board { position: absolute; left: 36px; top: 36px; width: 1150px; bottom: 36px; background: #0c0c0c; border-radius: 6px; box-shadow: inset 0 0 0 3px #2a2a2a, 0 10px 30px rgb(0 0 0 / .45); padding: 26px 30px; }
+.flap .hd { display: flex; align-items: center; gap: 18px; margin-bottom: 18px; }
+.flap .hd .t { white-space: nowrap; font: 800 20px "Barlow Condensed"; letter-spacing: .1em; color: #ffb000; }
+.flap .nav { margin-left: auto; display: flex; gap: 6px; }
+.flap .nav span { font: 700 18px "Barlow Condensed"; letter-spacing: .1em; padding: 6px 14px; border: 2px solid #3a3a3a; }
+.flap .nav span.cur { background: #f2f2f2; color: #0c0c0c; border-color: #f2f2f2; }
+.flap .ch { display: inline-block; width: 24px; height: 44px; margin-right: 2px; background: linear-gradient(#1d1d1d 0 50%, #151515 50%); border-radius: 3px; text-align: center; font: 600 34px/44px "Barlow Condensed"; position: relative; }
+.flap .ch::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; background: #000; }
+.flap .cols, .flap .row { display: grid; grid-template-columns: 130px 468px 104px 78px 1fr; gap: 0 10px; align-items: center; }
+.flap .cols { font: 700 15px "Barlow Condensed"; letter-spacing: .16em; color: #9a9a9a; padding: 0 0 8px 18px; border-bottom: 1px solid #2a2a2a; margin-bottom: 8px; }
+.flap .row { height: 56px; padding-left: 18px; position: relative; }
+.flap .row::before { content: ""; position: absolute; left: 0; top: 18px; width: 8px; height: 20px; border-radius: 2px; background: #222; }
+.flap .row.lamp::before { background: #ffb000; box-shadow: 0 0 10px #ffb000; }
+.flap .row.amber .st .ch { color: #ffb000; }
+.flap .row.red .ch { color: #b3261e; }
+.flap .row.focus { outline: 3px solid #f2f2f2; outline-offset: 2px; background: #161616; }
+.flap .row.focus::before { background: #f2f2f2; }
+.flap .row.focus .ch { animation: flip .5s calc(var(--k) * 35ms) both; }
+@keyframes flip { 0% { transform: rotateX(90deg); } 60% { transform: rotateX(-20deg); } 100% { transform: none; } }
+.flap .binari { position: absolute; left: 30px; right: 30px; bottom: 24px; border-top: 1px solid #2a2a2a; padding-top: 14px; display: flex; gap: 22px; align-items: center; }
+.flap .binari b { font: 700 15px "Barlow Condensed"; letter-spacing: .16em; color: #9a9a9a; }
+.flap .binari span { font: 700 20px "Barlow Condensed"; letter-spacing: .06em; }
+.flap .binari i { font-style: normal; color: #ffb000; margin-left: 6px; }
+.flap .side { position: absolute; left: 1214px; right: 36px; top: 36px; bottom: 36px; background: #0c0c0c; border-radius: 6px; box-shadow: inset 0 0 0 3px #2a2a2a; padding: 26px; display: flex; flex-direction: column; gap: 16px; }
+.flap .side .lbl { font: 700 15px "Barlow Condensed"; letter-spacing: .16em; color: #9a9a9a; }
+.flap .side img { width: 100%; max-height: 380px; object-fit: contain; }
+.flap .side h3 { font: 800 34px/1 "Barlow Condensed"; text-transform: uppercase; }
+.flap .side p { font: 600 20px "Barlow Condensed"; color: #c9c9c9; letter-spacing: .04em; }
+.flap .btn { margin-top: auto; height: 58px; background: #ffb000; color: #0c0c0c; display: flex; align-items: center; gap: 12px; padding: 0 16px 0 10px; font: 800 26px "Barlow Condensed"; letter-spacing: .08em; }
+.flap .btn .glyph { background: #0c0c0c; color: #ffb000; }
+
+/* ====================== 5. IMBARCO ====================== */
+.pass { background: #e4e7eb; color: #151515; font-family: Archivo, sans-serif; }
+.pass .top { position: absolute; left: 48px; right: 48px; top: 30px; height: 60px; display: flex; align-items: center; gap: 22px; }
+.pass .logo { font-weight: 900; font-size: 30px; letter-spacing: -.01em; }
+.pass .logo i { font-style: normal; font-weight: 500; color: #6b7076; margin-left: 10px; font-size: 18px; }
+.pass .nav { display: flex; gap: 4px; margin-left: 20px; background: #d3d7dc; padding: 4px; border-radius: 10px; }
+.pass .nav span { padding: 9px 18px; border-radius: 7px; font-weight: 700; font-size: 17px; }
+.pass .nav span.cur { background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .15); }
+.pass .clock { margin-left: auto; font-weight: 800; font-size: 24px; font-variant-numeric: tabular-nums; }
+.pass .card { position: absolute; left: 48px; top: 122px; width: 960px; height: 470px; background: #fff; border-radius: 20px; display: grid; grid-template-columns: 1fr 290px; overflow: hidden; box-shadow: 0 0 0 4px #e4e7eb, 0 0 0 8px #151515; }
+.pass .main { padding: 30px 34px; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: auto auto 1fr auto; gap: 20px 24px; }
+.pass .band { grid-column: 1/-1; display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 15px; letter-spacing: .14em; text-transform: uppercase; color: #6b7076; border-bottom: 2px solid #151515; padding-bottom: 12px; }
+.pass .band b { color: #151515; }
+.pass .f small { display: block; font-weight: 700; font-size: 13px; letter-spacing: .14em; text-transform: uppercase; color: #6b7076; margin-bottom: 4px; }
+.pass .f span { white-space: nowrap; font-weight: 800; font-size: 26px; font-variant-numeric: tabular-nums; line-height: 1.05; }
+.pass .f.big { grid-column: 1/-1; }
+.pass .f.big span { white-space: normal; display: block; font-size: 46px; font-weight: 900; font-stretch: 85%; letter-spacing: -.01em; }
+.pass .bar { grid-column: 1/-1; display: flex; align-items: flex-end; justify-content: space-between; }
+.pass .code { width: 380px; height: 54px; background: repeating-linear-gradient(90deg, #151515 0 3px, #fff 3px 5px, #151515 5px 6px, #fff 6px 10px, #151515 10px 14px, #fff 14px 16px); }
+.pass .go { white-space: nowrap; height: 60px; display: flex; align-items: center; gap: 12px; background: #151515; color: #fff; border-radius: 12px; padding: 0 22px 0 10px; font-weight: 900; font-size: 24px; box-shadow: 0 0 0 4px #fff, 0 0 0 8px #151515; }
+.pass .go .glyph { background: #fff; color: #151515; }
+.pass .stub { border-left: 3px dashed #c3c8ce; padding: 28px 26px; display: flex; flex-direction: column; gap: 14px; background: #f5f6f7; position: relative; }
+.pass .stub::before, .pass .stub::after { content: ""; position: absolute; left: -16px; width: 30px; height: 30px; border-radius: 50%; background: #e4e7eb; }
+.pass .stub::before { top: -15px; } .pass .stub::after { bottom: -15px; }
+.pass .stub img { width: 100%; }
+.pass .stub .f span { font-size: 24px; }
+.pass .gates { position: absolute; left: 1040px; right: 48px; top: 122px; height: 470px; background: #151515; color: #f5f6f7; border-radius: 20px; padding: 24px 26px; }
+.pass .gates h2 { font-weight: 800; font-size: 15px; letter-spacing: .14em; text-transform: uppercase; color: #9aa0a6; display: flex; justify-content: space-between; margin-bottom: 10px; }
+.pass .gr { display: grid; grid-template-columns: 64px 1fr 56px 96px; gap: 10px; align-items: center; height: 52px; border-top: 1px solid #2c2f33; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pass .gr .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pass .gr .s { font-size: 13px; letter-spacing: .1em; text-align: right; color: #9aa0a6; }
+.pass .gr.alert { background: #ff5a1f; color: #151515; margin: 0 -12px; padding: 0 12px; border-radius: 6px; }
+.pass .gr.alert .s { color: #151515; }
+.pass .recent { position: absolute; left: 48px; right: 48px; top: 626px; }
+.pass .recent h2 { font-weight: 800; font-size: 15px; letter-spacing: .14em; text-transform: uppercase; color: #6b7076; margin-bottom: 14px; }
+.pass .stubs { display: flex; gap: 18px; }
+.pass .mini { background: #fff; border-radius: 12px; display: grid; grid-template-columns: 76px 1fr; gap: 12px; padding: 12px; width: 285px; align-items: center; }
+.pass .mini img { width: 76px; height: 96px; object-fit: contain; }
+.pass .mini b { display: block; font-size: 17px; line-height: 1.15; }
+.pass .mini small { font-size: 13px; font-weight: 700; letter-spacing: .1em; color: #6b7076; text-transform: uppercase; }
+.pass .legend { position: absolute; right: 48px; bottom: 26px; display: flex; gap: 18px; font-weight: 800; font-size: 16px; }
+.pass .legend span { display: flex; gap: 8px; align-items: center; }
+.pass .legend .glyph { width: 28px; height: 28px; font-size: 13px; background: #151515; color: #fff; }
+
+/* ====================== 6. ORARIO ====================== */
+.tt { background: radial-gradient(ellipse 70% 90% at 40% 40%, #f2c53a, #e0a800 55%, #b98500); color: #f4efe0; font: 400 22px/1.25 Archivo, sans-serif; font-stretch: 75%; }
+.tt * { font-size: 22px !important; }
+.tt .light { position: absolute; inset: 0; background: linear-gradient(101deg, transparent 30%, rgb(255 250 220 / .35) 42%, transparent 54%); pointer-events: none; }
+.tt .top { position: absolute; left: 60px; right: 60px; top: 34px; display: flex; gap: 26px; align-items: center; color: #2b3440; }
+.tt .top b { font-weight: 900; text-transform: uppercase; letter-spacing: .08em; background: #2b3440; color: #f4efe0; padding: 4px 14px; }
+.tt .top span { font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.tt .top span.cur { text-decoration: underline 3px; text-underline-offset: 6px; }
+.tt .top .clock { margin-left: auto; font-weight: 900; font-variant-numeric: tabular-nums; }
+.tt .rack { position: absolute; left: 60px; top: 110px; display: flex; gap: 26px; }
+.tt .slide { width: 400px; height: 640px; transform: skewX(-11deg); background: rgb(43 52 64 / .86); box-shadow: inset 0 0 0 2px rgb(244 239 224 / .25), 8px 10px 0 rgb(0 0 0 / .18); padding: 22px 30px; }
+.tt .slide > * { transform: skewX(11deg); }
+.tt .slide.glass2 { background: rgb(30 80 60 / .82); }
+.tt .slide.glass3 { background: rgb(120 30 24 / .8); }
+.tt .slide h2 { font-weight: 900; text-transform: uppercase; letter-spacing: .1em; background: #f4efe0; color: #1a1a1a; padding: 6px 12px; margin-bottom: 14px; display: flex; justify-content: space-between; }
+.tt .r { display: grid; grid-template-columns: 22px 1fr 54px; gap: 10px; align-items: baseline; padding: 6px 0; border-bottom: 1px solid rgb(244 239 224 / .22); }
+.tt .r .m { width: 16px; height: 16px; border: 2px solid #f4efe0; border-radius: 50%; display: inline-block; align-self: center; }
+.tt .r .m.on { background: #f4efe0; }
+.tt .r .h { text-align: right; font-variant-numeric: tabular-nums; font-weight: 700; }
+.tt .r .tl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tt .r.focus { background: #f4efe0; color: #1a1a1a; margin: 0 -14px; padding: 6px 14px; font-weight: 900; text-transform: uppercase; outline: 3px solid #1a1a1a; }
+.tt .r.focus .m { border-color: #1a1a1a; background: #1a1a1a; }
+.tt .lbl { text-transform: uppercase; letter-spacing: .1em; font-weight: 700; opacity: .75; margin: 14px 0 6px; }
+.tt .cover { display: flex; gap: 16px; align-items: flex-end; margin: 6px 0 14px; }
+.tt .cover img { height: 150px; }
+.tt .cover div { font-weight: 900; text-transform: uppercase; }
+.tt .cover small { display: block; font-weight: 400; text-transform: none; }
+.tt .ticks { position: absolute; left: 60px; right: 60px; bottom: 34px; display: flex; gap: 10px; align-items: center; color: #2b3440; }
+.tt .ticks i { width: 46px; height: 10px; border: 2px solid #2b3440; }
+.tt .ticks i.on { background: #2b3440; }
+.tt .ticks span { margin-left: auto; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+
+/* ====================== 7. MONOCROMO ====================== */
+.mono { background: #fafafa; color: #0a0a0a; font-family: Archivo, sans-serif; }
+.mono .top { position: absolute; left: 56px; right: 56px; top: 0; height: 84px; display: flex; align-items: center; gap: 28px; border-bottom: 1px solid #e6e6e6; }
+.mono .logo { font-weight: 800; font-size: 24px; letter-spacing: -.02em; display: flex; align-items: center; gap: 10px; }
+.mono .logo i { width: 22px; height: 22px; border-radius: 6px; background: #0a0a0a; }
+.mono .nav { display: flex; gap: 26px; font-weight: 600; font-size: 17px; color: #6b6b6b; }
+.mono .nav .cur { color: #0a0a0a; }
+.mono .search { margin-left: auto; width: 300px; height: 42px; border: 1px solid #e0e0e0; border-radius: 10px; display: flex; align-items: center; padding: 0 14px; color: #8a8a8a; font-size: 15px; gap: 10px; background: #fff; }
+.mono .clock { font-weight: 600; font-size: 17px; color: #6b6b6b; font-variant-numeric: tabular-nums; }
+.mono .hero { position: absolute; left: 56px; right: 56px; top: 118px; height: 430px; display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+.mono .eyebrow { font-weight: 600; font-size: 15px; color: #5b5bd6; margin-bottom: 14px; }
+.mono h1 { font-weight: 700; font-size: 52px; line-height: 1.04; letter-spacing: -.025em; margin-bottom: 18px; }
+.mono .meta { font-size: 18px; color: #6b6b6b; margin-bottom: 30px; }
+.mono .btns { display: flex; gap: 12px; }
+.mono .b1 { height: 52px; padding: 0 22px 0 10px; background: #5b5bd6; color: #fff; border-radius: 12px; display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 18px; box-shadow: 0 0 0 3px #fafafa, 0 0 0 6px #0a0a0a; }
+.mono .b1 .glyph { width: 32px; height: 32px; font-size: 14px; background: rgb(255 255 255 / .2); color: #fff; }
+.mono .b2 { height: 52px; padding: 0 20px; border: 1px solid #d6d6d6; border-radius: 12px; display: flex; align-items: center; font-weight: 600; font-size: 18px; }
+.mono .shot { height: 430px; border-radius: 20px; background: radial-gradient(circle at 50% 45%, #ffffff, #ececee 70%); border: 1px solid #e6e6e6; display: grid; place-items: center; }
+.mono .shot img { height: 330px; box-shadow: 0 24px 48px rgb(0 0 0 / .12); border-radius: 4px; }
+.mono .sec { position: absolute; left: 56px; right: 56px; top: 588px; }
+.mono .sec h2 { font-weight: 700; font-size: 20px; display: flex; justify-content: space-between; margin-bottom: 16px; }
+.mono .sec h2 small { font-weight: 500; font-size: 15px; color: #6b6b6b; }
+.mono .row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 16px; }
+.mono .tile { background: #fff; border: 1px solid #e6e6e6; border-radius: 14px; padding: 12px; }
+.mono .tile .im { height: 150px; display: grid; place-items: center; background: #f3f3f4; border-radius: 8px; margin-bottom: 10px; }
+.mono .tile img { max-height: 130px; max-width: 90%; }
+.mono .tile b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mono .tile small { font-size: 13px; color: #6b6b6b; }
+
+/* ====================== 8. BINARIO ====================== */
+.rail { background: #efe8da; color: #141414; font-family: "Source Serif 4", serif; }
+.rail .mast { position: absolute; left: 0; right: 0; top: 40px; text-align: center; font-variant: small-caps; letter-spacing: .12em; font-size: 22px; }
+.rail .mast b { font-weight: 700; font-size: 34px; letter-spacing: .06em; display: block; font-variant: normal; }
+.rail .mast nav { margin-top: 10px; font-size: 17px; display: flex; justify-content: center; gap: 26px; }
+.rail .mast nav .cur { color: #c23b22; border-bottom: 1px solid #c23b22; }
+.rail .rule { position: absolute; left: 330px; right: 330px; height: 1px; background: #141414; }
+.rail .block { position: absolute; left: 330px; right: 330px; top: 196px; display: grid; grid-template-columns: 1fr 96px 1fr; }
+.rail .col h2 { font-variant: small-caps; letter-spacing: .12em; font-size: 17px; font-weight: 600; margin-bottom: 10px; }
+.rail .e { font-size: 18px; line-height: 1.5; padding: 7px 0; border-bottom: 1px solid rgb(20 20 20 / .18); position: relative; }
+.rail .e i { font-style: italic; }
+.rail .e small { font-variant: small-caps; letter-spacing: .08em; font-size: 15px; color: #5a554b; }
+.rail .e.focus::before, .rail .e.focus::after { position: absolute; top: 2px; font-size: 40px; color: #c23b22; font-weight: 300; line-height: 1; }
+.rail .e.focus::before { content: "["; left: -22px; } .rail .e.focus::after { content: "]"; right: -18px; }
+.rail .e.focus { color: #141414; }
+.rail .e .new { color: #c23b22; font-variant: small-caps; letter-spacing: .08em; }
+.rail .keys { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 36px; border-left: 1px solid #141414; border-right: 1px solid #141414; margin: 0 14px; }
+.rail .k { width: 50px; height: 28px; border: 1px solid #c23b22; color: #c23b22; font-variant: small-caps; font-size: 15px; letter-spacing: .06em; display: grid; place-items: center; }
+.rail .k.on { background: #c23b22; color: #efe8da; }
+.rail .k.off { text-decoration: line-through; opacity: .55; }
+.rail .plate { position: absolute; left: 60px; top: 196px; width: 220px; }
+.rail .plate img { width: 100%; filter: sepia(.15); }
+.rail .plate p { font-size: 15px; line-height: 1.4; margin-top: 10px; font-style: italic; }
+.rail .plate p b { font-style: normal; font-variant: small-caps; letter-spacing: .08em; color: #c23b22; font-weight: 600; }
+.rail .go { margin-top: 14px; display: inline-flex; align-items: center; gap: 10px; border: 1px solid #141414; padding: 6px 14px 6px 6px; font-variant: small-caps; letter-spacing: .1em; font-size: 18px; outline: 2px solid #c23b22; outline-offset: 3px; }
+.rail .go .glyph { background: #141414; color: #efe8da; width: 30px; height: 30px; font: 600 14px Archivo; }
+.rail .notes { position: absolute; right: 60px; top: 196px; width: 220px; font-size: 15px; line-height: 1.45; }
+.rail .notes p { margin-bottom: 18px; padding-left: 12px; border-left: 1px solid #c23b22; }
+.rail .notes b { font-variant: small-caps; letter-spacing: .08em; color: #c23b22; font-weight: 600; }
+.rail .foot { position: absolute; left: 330px; right: 330px; bottom: 40px; display: flex; justify-content: space-between; font-variant: small-caps; letter-spacing: .1em; font-size: 16px; border-top: 1px solid #141414; padding-top: 10px; }
+/* ====================== 9. IBRIDO (Monocromo + Rivista) ====================== */
+.hy { --sec: oklch(0.6 0.22 292); background: #fafafa; color: #0a0a0a; font-family: Archivo, sans-serif; }
+.hy .top { position: absolute; left: 56px; right: 56px; top: 0; height: 88px; display: flex; align-items: center; gap: 30px; border-bottom: 2px solid #0a0a0a; }
+.hy .logo { font-weight: 900; font-stretch: 125%; font-size: 30px; letter-spacing: -.02em; }
+.hy .logo b { background: #ffe14d; padding: 0 6px; margin-left: 2px; box-shadow: -3px 3px 0 #0a0a0a; }
+.hy .issue { font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: #6b6b6b; line-height: 1.3; }
+.hy .nav { display: flex; gap: 26px; font-weight: 700; font-size: 17px; color: #6b6b6b; margin-left: 10px; }
+.hy .nav .cur { color: #0a0a0a; box-shadow: 0 4px 0 #0a0a0a; padding-bottom: 4px; }
+.hy .search { margin-left: auto; width: 290px; height: 42px; border: 1px solid #dcdcdc; border-radius: 10px; display: flex; align-items: center; padding: 0 14px; color: #8a8a8a; font-size: 15px; background: #fff; }
+.hy .clock { font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; }
+.hy .hero { position: absolute; left: 56px; right: 56px; top: 116px; height: 420px; display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center; }
+.hy .kick { display: inline-block; background: #0a0a0a; color: #fff; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: .1em; padding: 6px 10px; margin-bottom: 18px; }
+.hy .kick i { font-style: normal; color: var(--sec); filter: brightness(1.5); }
+.hy h1 { font-weight: 900; font-stretch: 75%; font-size: 62px; line-height: .98; letter-spacing: -.02em; margin-bottom: 26px; }
+.hy .stats { display: flex; margin-bottom: 30px; }
+.hy .stats div { padding-right: 24px; margin-right: 24px; border-right: 2px solid #0a0a0a; }
+.hy .stats div:last-child { border: 0; }
+.hy .stats b { display: block; font-weight: 900; font-stretch: 75%; font-size: 40px; line-height: 1; font-variant-numeric: tabular-nums; }
+.hy .stats span { font-size: 14px; font-weight: 600; color: #6b6b6b; }
+.hy .btns { display: flex; gap: 12px; align-items: center; }
+.hy .b1 { height: 54px; padding: 0 24px 0 10px; background: #ffe14d; color: #0a0a0a; border-radius: 12px; display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 19px; box-shadow: 0 0 0 3px #fafafa, 0 0 0 6px #0a0a0a, -6px 6px 0 6px #0a0a0a; }
+.hy .b1 .glyph { width: 34px; height: 34px; font-size: 14px; background: #0a0a0a; color: #ffe14d; }
+.hy .b2 { height: 54px; padding: 0 20px; border: 1px solid #d6d6d6; border-radius: 12px; display: flex; align-items: center; font-weight: 700; font-size: 17px; background: #fff; }
+.hy .shot { position: relative; height: 420px; border-radius: 20px; background: var(--sec); overflow: hidden; display: grid; place-items: center; }
+.hy .shot::before { content: ""; position: absolute; inset: 0; background-image: radial-gradient(rgb(0 0 0 / .16) 1.4px, transparent 1.6px); background-size: 9px 9px; }
+.hy .shot img { position: relative; height: 320px; transform: rotate(4deg); border: 7px solid #fff; box-shadow: -12px 12px 0 #0a0a0a; }
+.hy .shot .pg { position: absolute; left: 22px; bottom: 18px; font-weight: 900; font-stretch: 75%; font-size: 22px; color: #fff; }
+.hy .burst { position: absolute; right: 34px; top: 28px; width: 150px; height: 150px; background: #ffe14d; display: grid; place-items: center; text-align: center; font-weight: 900; font-stretch: 75%; text-transform: uppercase; font-size: 19px; line-height: .95; transform: rotate(-12deg);
+  clip-path: polygon(50% 0,59% 13%,74% 5%,76% 21%,92% 19%,86% 34%,100% 42%,88% 52%,98% 66%,82% 70%,84% 86%,68% 82%,60% 98%,50% 86%,40% 98%,32% 82%,16% 86%,18% 70%,2% 66%,12% 52%,0 42%,14% 34%,8% 19%,24% 21%,26% 5%,41% 13%); }
+.hy .burst b { display: block; font-size: 36px; }
+.hy .sec { position: absolute; left: 56px; right: 56px; top: 566px; }
+.hy .sec h2 { font-weight: 900; font-stretch: 75%; font-size: 26px; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 14px; }
+.hy .sec h2 small { font-weight: 600; font-stretch: 100%; font-size: 15px; color: #6b6b6b; }
+.hy .row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 16px; }
+.hy .tile { background: #fff; border: 1px solid #e3e3e3; border-radius: 14px; padding: 0 12px 12px; position: relative; overflow: hidden; }
+.hy .tile::before { content: ""; display: block; height: 6px; margin: 0 -12px 12px; background: var(--c); }
+.hy .tile .im { height: 120px; display: grid; place-items: center; background: #f3f3f4; border-radius: 8px; margin-bottom: 10px; }
+.hy .tile img { max-height: 104px; max-width: 90%; }
+.hy .tile b { display: block; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hy .tile small { font-size: 13px; color: #6b6b6b; display: flex; justify-content: space-between; }
+.hy .tile small i { font-style: normal; font-weight: 800; color: #0a0a0a; }
+.hy .new { position: absolute; right: 8px; top: 14px; background: #e6007e; color: #fff; font-weight: 900; font-size: 11px; letter-spacing: .08em; padding: 3px 7px; transform: rotate(3deg); }
+.hy .toc { position: absolute; left: 56px; right: 56px; bottom: 26px; display: flex; gap: 10px; align-items: center; }
+.hy .toc > b { font-weight: 900; font-stretch: 75%; font-size: 18px; text-transform: uppercase; margin-right: 6px; }
+.hy .chip { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 14px 0 0; border: 1px solid #dcdcdc; border-radius: 10px; overflow: hidden; background: #fff; font-size: 15px; font-weight: 600; color: #6b6b6b; }
+.hy .chip i { width: 6px; align-self: stretch; background: var(--c); }
+.hy .chip b { font-weight: 900; font-stretch: 75%; font-size: 19px; color: #0a0a0a; }
+.hy .legend { margin-left: auto; display: flex; gap: 16px; font-weight: 700; font-size: 15px; }
+.hy .legend span { display: flex; gap: 7px; align-items: center; }
+.hy .legend .glyph { width: 28px; height: 28px; font-size: 13px; background: #0a0a0a; color: #fff; }
+.hy .legend .glyph.y { background: #ffe14d; color: #0a0a0a; }
+.note { position: absolute; left: 12px; bottom: 8px; font: 600 12px Archivo, sans-serif; color: rgb(255 255 255 / .55); z-index: 9; }
+.cat ~ .note, .stage.light .note { color: rgb(0 0 0 / .5); }
+</style>
+</head>
+<body>
+<div class="switch">
+  <button data-i="0" aria-pressed="true">1 · Rivista</button>
+  <button data-i="1" aria-pressed="false">2 · Videoteca</button>
+  <button data-i="2" aria-pressed="false">3 · Catalogo</button>
+  <button data-i="3" aria-pressed="false">4 · Tabellone</button>
+  <button data-i="4" aria-pressed="false">5 · Imbarco</button>
+  <button data-i="5" aria-pressed="false">6 · Orario</button>
+  <button data-i="6" aria-pressed="false">7 · Monocromo</button>
+  <button data-i="7" aria-pressed="false">8 · Binario</button>
+  <button data-i="8" aria-pressed="false">9 · Ibrido</button>
+  <small>tasti 1–9 o frecce · dati di esempio</small>
+</div>
+<div class="viewport"><div class="stage" id="stage">
+  <section class="mock riv on" id="m0"></section>
+  <section class="mock vid" id="m1"></section>
+  <section class="mock cat" id="m2"></section>
+  <section class="mock flap" id="m3"></section>
+  <section class="mock pass" id="m4"></section>
+  <section class="mock tt" id="m5"></section>
+  <section class="mock mono" id="m6"></section>
+  <section class="mock rail" id="m7"></section>
+  <section class="mock hy" id="m8"></section>
+</div></div>
+<script>
+const T = 'https://thumbnails.libretro.com/';
+const SYS = { gba: 'Nintendo - Game Boy Advance', snes: 'Nintendo - Super Nintendo Entertainment System', md: 'Sega - Mega Drive - Genesis',
+  ps2: 'Sony - PlayStation 2', nes: 'Nintendo - Nintendo Entertainment System', gb: 'Nintendo - Game Boy', psx: 'Sony - PlayStation', wii: 'Nintendo - Wii' };
+const g = (p, t, n) => ({ p, t, src: T + encodeURIComponent(SYS[p]) + '/Named_Boxarts/' + encodeURIComponent(n) + '.png' });
+const ZELDA = g('gba', 'The Legend of Zelda: The Minish Cap', 'Legend of Zelda, The - The Minish Cap (Europe) (En,Fr,De,Es,It)');
+const RECENT = [
+  g('snes', 'Super Metroid', 'Super Metroid (Japan, USA) (En,Ja)'),
+  g('md', 'Sonic the Hedgehog 2', 'Sonic The Hedgehog 2 (World)'),
+  g('wii', 'Zelda: Skyward Sword', 'Legend of Zelda, The - Skyward Sword (Europe) (En,Fr,De,Es,It)'),
+  g('ps2', 'Shadow of the Colossus', 'Shadow of the Colossus (Europe, Australia) (En,Fr,De,Es,It)'),
+  g('gba', 'Pokémon Smeraldo', 'Pokemon - Emerald Version (USA, Europe)'),
+  g('psx', 'Castlevania: SotN', 'Castlevania - Symphony of the Night (Europe)'),
+];
+const GBA = [
+  g('gba', 'Activision Anthology', 'Activision Anthology (USA)'),
+  g('gba', 'Castlevania: Aria of Sorrow', 'Castlevania - Aria of Sorrow (USA)'),
+  g('gba', 'Metroid Fusion', 'Metroid Fusion (USA)'),
+  g('gba', 'Pokémon Smeraldo', 'Pokemon - Emerald Version (USA, Europe)'),
+  ZELDA,
+];
+const SNES = [g('snes', 'Super Mario World', 'Super Mario World (USA)'), g('snes', 'A Link to the Past', 'Legend of Zelda, The - A Link to the Past (USA)'),
+  g('snes', 'Donkey Kong Country', 'Donkey Kong Country (USA) (Rev 2)'), g('snes', 'Animaniacs', 'Animaniacs (Europe)')];
+const PS2 = [g('ps2', 'Shadow of the Colossus', 'Shadow of the Colossus (Europe, Australia) (En,Fr,De,Es,It)'), g('ps2', 'Digimon World 4', 'Digimon World 4 (Europe) (En,De,Es,It)')];
+const NES = [g('nes', 'Super Mario Bros. 3', 'Super Mario Bros. 3 (USA)'), g('nes', 'Mega Man 2', 'Mega Man 2 (USA)')];
+const GB = [g('gb', 'Tetris', 'Tetris (World) (Rev 1)'), g('gb', 'Pokémon Rosso', 'Pokemon - Red Version (USA, Europe) (SGB Enhanced)')];
+const MD = [g('md', 'Sonic the Hedgehog 2', 'Sonic The Hedgehog 2 (World)'), g('md', 'Streets of Rage 2', 'Streets of Rage 2 (USA)')];
+const CONS = [
+  ['GBA', 'Game Boy Advance', 42, 292], ['SNES', 'Super Nintendo', 67, 352], ['MD', 'Mega Drive', 38, 222],
+  ['PS2', 'PlayStation 2', 15, 258, 'stream'], ['NES', 'NES', 51, 28], ['GB', 'Game Boy', 23, 138], ['PSX', 'PlayStation', 12, 200], ['WII', 'Wii', 4, 190, 'stream'],
+];
+const hue = h => `oklch(0.64 0.22 ${h})`;
+const img = (x, extra = '') => `<img src="${x.src}" alt="${x.t}" ${extra}>`;
+
+/* 1 Rivista */
+document.getElementById('m0').innerHTML = `
+  <header class="mast">
+    <div class="logo">Retro<b>Mate</b></div>
+    <div class="issue">Numero 47<br>Novembre 2026</div>
+    <nav class="tabs"><span class="cur">Home</span><span>Libreria</span><span>Opzioni</span>
+      <span class="clock">21:42 <svg width="30" height="22" viewBox="0 0 30 22"><rect x="1" y="3" width="28" height="16" rx="8" fill="#111"/><circle cx="21" cy="9" r="2" fill="#ffe14d"/><circle cx="24" cy="12" r="2" fill="#fbfbf8"/><rect x="6" y="10" width="7" height="2" fill="#fbfbf8"/><rect x="8.5" y="7.5" width="2" height="7" fill="#fbfbf8"/></svg></span></nav>
+  </header>
+  <section class="cover">
+    <div class="kicker">Storia di copertina · Game Boy Advance</div>
+    <h1 class="headline"><small>The Legend of Zelda</small>The Minish Cap</h1>
+    ${img(ZELDA, 'class="art"')}
+    <div class="burst"><div>Riprendi<b>ieri</b>22:10</div></div>
+    <div class="stats"><div><b>18 h</b><span>giocate</span></div><div><b>3</b><span>stati salvati</span></div><div><b>p.04</b><span>sezione GBA</span></div></div>
+    <div class="play"><span class="glyph">A</span>Gioca</div>
+    <div class="alt"><span class="glyph">X</span>Preferito</div>
+  </section>
+  <aside class="toc">
+    <h2>Sommario <small>8 console · 252 giochi</small></h2>
+    ${CONS.slice(0, 7).map(([ab, nm, ct, h, s], i) => `
+      <div class="row"><i style="background:${hue(h)}"></i><span class="ab">${ab}</span>
+        <span class="nm">${nm}${s ? ' <span class="tag">Streaming</span>' : ''}${ab === 'SNES' ? ' <span class="tag new">Nuovo</span>' : ''}</span>
+        <span class="pg">p.${String(4 + i * 8).padStart(2, '0')}</span><span class="ct">${ct}</span></div>`).join('')}
+  </aside>
+  <section class="recent">
+    <h3>Giocati di recente</h3>
+    ${RECENT.slice(0, 4).map((x, i) => `<div class="thumb">${img(x)}<p><small>p.${12 + i * 7}</small>${x.t}</p></div>`).join('')}
+  </section>
+  <div class="legend"><span><i class="glyph">A</i>Gioca</span><span><i class="glyph w">B</i>Indietro</span><span><i class="glyph w">X</i>Preferito</span></div>`;
+
+/* 2 Videoteca */
+const rack = (list, focus) => list.map(x => `<div class="case${x === focus ? ' focus' : ''}">${img(x)}${x === focus ? '<span class="sticker">18 h</span>' : ''}</div>`).join('');
+document.getElementById('m1').innerHTML = `
+  <i class="tube" style="left:180px"></i><i class="tube" style="left:900px"></i>
+  <header class="top"><div class="sign-logo">RetroMate</div>
+    <nav class="nav"><span class="cur">Home</span><span>Libreria</span><span>Opzioni</span></nav><div class="clock">21:42</div></header>
+  <div class="hang" style="left:48px; top:96px"><div>Ultimi noleggi <small>7</small></div></div>
+  <div class="rack" style="left:48px; top:200px; height:236px">${rack([ZELDA, ...RECENT], ZELDA)}</div>
+  <div class="title"><small>Game Boy Advance · restituito ieri, 22:10</small>The Legend of Zelda: The Minish Cap<span>18 ore · 3 stati salvati</span></div>
+  ${[['Game Boy Advance', 42, GBA.slice(0, 4)], ['Super Nintendo', 67, SNES], ['PlayStation 2', 15, PS2, 1]].map(([n, c, l, s], i) => `
+    <div class="aisle" style="left:${48 + i * 458}px">
+      <div class="hang"><div>${n} <small>${c}</small>${s ? '<span class="tagS">STREAMING</span>' : ''}</div></div>
+      <div class="rack">${rack(l)}</div>
+    </div>`).join('')}
+  <div class="receipt"><p><span>RETROMATE</span><span>21:42</span></p><hr>
+    <p><span>[A] Gioca</span><span>▶</span></p><p><span>[B] Indietro</span><span>—</span></p><p><span>[X] Preferito</span><span>★</span></p></div>`;
+
+/* 3 Catalogo */
+const halls = [ // col, row, w, h (6x7 plan, row 8 = entrance)
+  ['SNES', 67, 352, 1, 1, 3, 4], ['NES', 51, 28, 4, 1, 3, 3], ['GBA', 42, 292, 4, 4, 3, 3], ['MD', 38, 222, 1, 5, 2, 3],
+  ['GB', 23, 138, 3, 5, 1, 3], ['PS2', 15, 258, 4, 7, 2, 1], ['PSX', 12, 200, 6, 7, 1, 1],
+];
+const pool = [...GBA, ...RECENT, ...SNES, ...NES, ...GB, ...MD, ...PS2];
+const cells = Array.from({ length: 36 }, (_, i) => (i === 11 ? ZELDA : pool[(i * 7) % pool.length]));
+const LOOP = `<svg class="loop" style="inset:-12px -10px;width:calc(100% + 20px);height:calc(100% + 24px)" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M54 4 C 18 2, 4 26, 4 52 C 4 84, 26 98, 54 97 C 84 96, 97 76, 96 48 C 95 20, 78 3, 44 6 C 34 7, 26 11, 22 16" fill="none" stroke="#1f3fbf" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round"/></svg>`;
+const star = `<svg class="star" viewBox="0 0 40 40"><path d="M20 4 L24 15 L36 15.5 L26.5 22.5 L30 34 L20 27 L10 34.5 L13.5 22.5 L4 15.5 L16 15 Z" fill="none" stroke="#1f3fbf" stroke-width="2.4" stroke-linejoin="round"/></svg>`;
+document.getElementById('m2').innerHTML = `
+  <header class="top"><div class="logo">RetroMate</div><div class="vol">CATALOGO<br>NOV 2026</div>
+    <nav class="nav"><span>Home</span><span class="cur">Libreria</span><span>Opzioni</span></nav>
+    <div class="search"><svg width="20" height="20" viewBox="0 0 20 20"><circle cx="8" cy="8" r="6" fill="none" stroke="#1a1a1a" stroke-width="2.5"/><path d="M12.5 12.5 L18 18" stroke="#1a1a1a" stroke-width="2.5"/></svg>Cerca un gioco…</div>
+    <div class="clock">21:42</div></header>
+  <section class="map">
+    <h2>Pianta dei padiglioni <small>252 giochi</small></h2>
+    <div class="halls">
+      ${halls.map(([ab, ct, h, c, r, w, hh]) => `<div class="hall" style="grid-column:${c}/span ${w};grid-row:${r}/span ${hh};background:${hue(h)}"><b>${ab}</b><span>${ct} giochi</span>${ab === 'GBA' ? LOOP + '<span class="here" style="left:74px;top:4px">← sei qui</span>' : ''}</div>`).join('')}
+      <div class="entrance" style="grid-row:8">INGRESSO · WII 4 (STREAMING)</div>
+    </div>
+    <p class="legendmap">Ogni padiglione è grande quanto la sua console.<br>LB / RB cambiano padiglione · ★ = preferito · barrato = giocato</p>
+  </section>
+  <section class="grid">
+    <h2>Padiglione GBA · Game Boy Advance <small>A01–A42</small></h2>
+    <div class="cells">
+      ${cells.map((x, i) => `<div class="cell${[1, 4, 11, 20].includes(i) ? ' played' : ''}"><div class="im">${img(x)}</div><p>A${String(i + 1).padStart(2, '0')} ${x.t}</p>${[3, 11, 17, 26].includes(i) ? star : ''}${i === 11 ? LOOP : ''}</div>`).join('')}
+    </div>
+  </section>
+  <div class="zoom" style="left:900px;top:404px">
+    ${img(ZELDA)}
+    <div><span class="code">A12 · GBA</span><h3>The Legend of Zelda: The Minish Cap</h3>
+      <dl><dt>giocato</dt><dd>18 ore</dd><dt>ultima</dt><dd>ieri, 22:10</dd><dt>stati</dt><dd>3</dd></dl>
+      <span class="btn"><i class="glyph">A</i>Gioca</span></div>
+  </div>
+  <div class="legend"><span><i class="glyph">A</i>Gioca</span><span><i class="glyph w">B</i>Indietro</span><span><i class="glyph w">X</i>Cerchia preferito</span></div>`;
+
+/* shared rows for the other five */
+const SMW = SNES[0];
+const ROWS = [ // game, console, when, hours, state, short title
+  [ZELDA, 'GBA', '21:10', '18', 'PRONTO', 'ZELDA MINISH CAP'],
+  [RECENT[0], 'SNES', 'IERI', '6', 'PRONTO', 'SUPER METROID'],
+  [RECENT[1], 'MD', 'IERI', '2', 'PRONTO', 'SONIC 2'],
+  [RECENT[2], 'WII', 'LUN', '50', 'STREAMING', 'SKYWARD SWORD'],
+  [RECENT[3], 'PS2', 'DOM', '11', 'OCCUPATO', 'SHADOW OF COLOSSUS'],
+  [RECENT[4], 'GBA', 'SAB', '34', 'PRONTO', 'POKEMON SMERALDO'],
+  [RECENT[5], 'PSX', '12/11', '9', 'PRONTO', 'CASTLEVANIA SOTN'],
+  [SMW, 'SNES', '—', '0', 'NUOVO', 'SUPER MARIO WORLD'],
+];
+const legend = (cls = '') => `<div class="legend ${cls}"><span><i class="glyph">A</i>Gioca</span><span><i class="glyph w">B</i>Indietro</span><span><i class="glyph w">X</i>Preferito</span></div>`;
+
+/* 4 Tabellone */
+let k = 0;
+const flaps = (s, n) => [...s.toUpperCase().padEnd(n).slice(0, n)].map(c => `<span class="ch" style="--k:${k++}">${c === ' ' ? '&nbsp;' : c}</span>`).join('');
+const flapRows = ROWS.map(([x, c, w, h, s, t], i) => {
+  k = 0;
+  const cls = i === 0 ? 'focus' : s === 'OCCUPATO' ? 'amber lamp' : s === 'STREAMING' ? 'lamp' : s === 'NUOVO' ? 'lamp' : '';
+  return `<div class="row ${cls}"><span>${flaps(w, 5)}</span><span>${flaps(t, 18)}</span><span>${flaps(c, 4)}</span><span>${flaps(h + 'H', 3)}</span><span class="st">${flaps(s, 9)}</span></div>`;
+}).join('');
+document.getElementById('m3').innerHTML = `
+  <div class="board">
+    <div class="hd">${(k = 0, flaps('PARTENZE', 8))}<span class="t">RETROMATE · ULTIME PARTITE</span>
+      <nav class="nav"><span class="cur">HOME</span><span>LIBRERIA</span><span>OPZIONI</span></nav>${(k = 0, flaps('21:42', 5))}</div>
+    <div class="cols"><span>ULTIMA</span><span>GIOCO</span><span>CONSOLE</span><span>ORE</span><span>STATO</span></div>
+    ${flapRows}
+    <div class="binari"><b>BINARI</b>${CONS.map(([ab, , ct, , s]) => `<span>${ab}<i>${ct}</i></span>`).join('')}</div>
+  </div>
+  <aside class="side"><span class="lbl">BINARIO 1 · GAME BOY ADVANCE</span>${img(ZELDA)}
+    <h3>The Legend of Zelda: The Minish Cap</h3><p>18 ORE · 3 STATI · ULTIMA 21:10</p>
+    <div class="btn"><i class="glyph">A</i>GIOCA</div></aside>`;
+
+/* 5 Imbarco */
+document.getElementById('m4').innerHTML = `
+  <header class="top"><div class="logo">RetroMate<i>carta d'imbarco</i></div>
+    <nav class="nav"><span class="cur">Home</span><span>Libreria</span><span>Opzioni</span></nav><div class="clock">21:42</div></header>
+  <div class="card">
+    <div class="main">
+      <div class="band"><span>Carta d'imbarco · <b>Giocatore 1</b></span><span>Seq. <b>047</b></span></div>
+      <div class="f big"><small>Destinazione</small><span>The Legend of Zelda: The Minish Cap</span></div>
+      <div class="f"><small>Gate</small><span>GBA</span></div>
+      <div class="f"><small>Posto</small><span>Locale</span></div>
+      <div class="f"><small>Ore giocate</small><span>18 h</span></div>
+      <div class="f"><small>Ultimo volo</small><span>Ieri 22:10</span></div>
+      <div class="bar"><div class="code"></div><div class="go"><i class="glyph">A</i>Imbarca · Gioca</div></div>
+    </div>
+    <div class="stub">${img(ZELDA)}<div class="f"><small>Stati salvati</small><span>3</span></div></div>
+  </div>
+  <section class="gates"><h2><span>Ultime partite</span><span>Stato</span></h2>
+    ${ROWS.slice(1).map(([x, c, w, h, s]) => `<div class="gr${s === 'NUOVO' ? ' alert' : ''}"><span>${w}</span><span class="t">${x.t}</span><span>${c}</span><span class="s">${s === 'OCCUPATO' ? 'SLOT OCCUPATO' : s}</span></div>`).join('')}
+  </section>
+  <section class="recent"><h2>Altre carte d'imbarco</h2><div class="stubs">
+    ${ROWS.slice(1, 5).map(([x, c, w, h]) => `<div class="mini">${img(x)}<div><small>Gate ${c} · ${h} h</small><b>${x.t}</b></div></div>`).join('')}</div></section>
+  ${legend()}`;
+
+/* 6 Orario */
+const ttRow = ([x, c, w, h], focus, on) => `<div class="r${focus ? ' focus' : ''}"><i class="m${on ? ' on' : ''}"></i><span class="tl">${x.t}</span><span class="h">${h} h</span></div>`;
+document.getElementById('m5').innerHTML = `
+  <div class="light"></div>
+  <header class="top"><b>RetroMate</b><span>Orario invernale 2026</span><span class="cur">Home</span><span>Libreria</span><span>Opzioni</span><span class="clock">21:42</span></header>
+  <div class="rack">
+    <div class="slide"><h2><span>Ultime partite</span><span>Ore</span></h2>
+      <div class="cover">${img(ZELDA)}<div>GBA · gate 04<small>ultima ieri 22:10 · 3 stati</small></div></div>
+      ${ROWS.slice(0, 6).map((r, i) => ttRow(r, i === 0, i < 3)).join('')}
+      <p class="lbl">● giocato questa settimana ○ no</p></div>
+    <div class="slide glass2"><h2><span>Game Boy Advance</span><span>42</span></h2>
+      ${GBA.map(x => ttRow([x, 'GBA', '', [0, 12, 4, 34, 18][GBA.indexOf(x)]], false, x === ZELDA)).join('')}
+      <p class="lbl">Super Nintendo · 67</p>
+      ${SNES.slice(0, 3).map(x => ttRow([x, '', '', 3], false, false)).join('')}</div>
+    <div class="slide glass3"><h2><span>Streaming</span><span>19</span></h2>
+      ${[...PS2, RECENT[2]].map(x => ttRow([x, '', '', 11], false, false)).join('')}
+      <p class="lbl">Slot server</p><div class="r"><i class="m on"></i><span class="tl">Occupato da un'altra partita</span><span class="h">1/1</span></div></div>
+  </div>
+  <div class="ticks"><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><span>Slide 1 di 8 · LB / RB</span></div>`;
+
+/* 7 Monocromo */
+document.getElementById('m6').innerHTML = `
+  <header class="top"><div class="logo"><i></i>RetroMate</div>
+    <nav class="nav"><span class="cur">Home</span><span>Libreria</span><span>Opzioni</span></nav>
+    <div class="search">Cerca nella libreria</div><div class="clock">21:42</div></header>
+  <section class="hero"><div>
+      <p class="eyebrow">Continua a giocare · Game Boy Advance</p>
+      <h1>The Legend of Zelda: The Minish Cap</h1>
+      <p class="meta">18 ore giocate · ultimo salvataggio ieri alle 22:10 · 3 stati salvati</p>
+      <div class="btns"><span class="b1"><i class="glyph">A</i>Gioca</span><span class="b2">Stati salvati</span><span class="b2">Opzioni</span></div></div>
+    <div class="shot">${img(ZELDA)}</div></section>
+  <section class="sec"><h2>Giocati di recente <small>252 giochi in 8 console</small></h2>
+    <div class="row">${ROWS.slice(1).map(([x, c, w, h]) => `<div class="tile"><div class="im">${img(x)}</div><b>${x.t}</b><small>${c} · ${h} h</small></div>`).join('')}</div></section>`;
+
+/* 8 Binario */
+document.getElementById('m7').innerHTML = `
+  <header class="mast"><b>RetroMate</b>registro della collezione · novembre mmxxvi
+    <nav><span class="cur">Home</span><span>Libreria</span><span>Opzioni</span><span>21:42</span></nav></header>
+  <div class="rule" style="top:178px"></div>
+  <aside class="plate">${img(ZELDA)}<p><b>Tav. i.</b> The Legend of Zelda: The Minish Cap, Game Boy Advance. Diciotto ore; ultimo salvataggio ieri, 22:10.</p>
+    <span class="go"><i class="glyph">A</i>gioca</span></aside>
+  <div class="block">
+    <div class="col"><h2>Ultime partite</h2>
+      ${ROWS.slice(0, 8).map(([x, c, w, h, s], i) => `<p class="e${i === 0 ? ' focus' : ''}"><i>${x.t}</i>, <small>${c}</small> — ${s === 'NUOVO' ? '<span class="new">nuovo</span>' : h + ' ore'}</p>`).join('')}</div>
+    <div class="keys">${CONS.map(([ab], i) => `<span class="k${i === 0 ? ' on' : ''}${ab === 'PS2' ? ' off' : ''}">${ab.toLowerCase()}</span>`).join('')}</div>
+    <div class="col"><h2>Console</h2>
+      ${CONS.map(([ab, nm, ct, , s]) => `<p class="e">${nm} <small>· ${ab.toLowerCase()}</small> — ${ct} giochi${s ? ', <small>in streaming</small>' : ''}</p>`).join('')}</div>
+  </div>
+  <aside class="notes"><p><b>nota.</b> Super Mario World è stato trovato dalla scansione del 17 novembre.</p>
+    <p><b>nota.</b> La chiave ps2 è barrata: lo slot del server è occupato da un'altra partita.</p>
+    <p><b>legenda.</b> A gioca · B indietro · X preferito · LB/RB console.</p></aside>
+  <footer class="foot"><span>i — home</span><span>252 giochi · 8 console</span><span>pag. 1</span></footer>`;
+
+/* 9 Ibrido */
+const HUE = Object.fromEntries(CONS.map(([ab, , , h]) => [ab, h]));
+document.getElementById('m8').innerHTML = `
+  <header class="top"><div class="logo">Retro<b>Mate</b></div><div class="issue">Numero 47<br>Novembre 2026</div>
+    <nav class="nav"><span class="cur">Home</span><span>Libreria</span><span>Opzioni</span></nav>
+    <div class="search">Cerca nella libreria</div><div class="clock">21:42</div></header>
+  <section class="hero"><div>
+      <span class="kick">Storia di copertina · <i>Game Boy Advance</i></span>
+      <h1>The Legend of Zelda: The Minish Cap</h1>
+      <div class="stats"><div><b>18 h</b><span>giocate</span></div><div><b>3</b><span>stati salvati</span></div><div><b>ieri</b><span>alle 22:10</span></div></div>
+      <div class="btns"><span class="b1"><i class="glyph">A</i>Gioca</span><span class="b2">Stati salvati</span><span class="b2">Opzioni</span></div></div>
+    <div class="shot">${img(ZELDA)}<div class="burst"><div>Riprendi<b>ieri</b></div></div><span class="pg">p.04 · GBA</span></div></section>
+  <section class="sec"><h2>Giocati di recente <small>252 giochi in 8 console</small></h2>
+    <div class="row">${ROWS.slice(1).map(([x, c, w, h, s], i) => `<div class="tile" style="--c:${hue(HUE[c] ?? 200)}">${s === 'NUOVO' ? '<span class="new">NUOVO</span>' : ''}<div class="im">${img(x)}</div><b>${x.t}</b><small><span>${c} · ${s === 'NUOVO' ? 'mai giocato' : h + ' h'}</span><i>p.${String(12 + i * 8).padStart(2, '0')}</i></small></div>`).join('')}</div></section>
+  <footer class="toc"><b>Sommario</b>${CONS.slice(0, 6).map(([ab, , ct, h]) => `<span class="chip" style="--c:${hue(h)}"><i></i><b>${ab}</b>${ct}</span>`).join('')}
+    <div class="legend"><span><i class="glyph y">A</i>Gioca</span><span><i class="glyph">B</i>Indietro</span><span><i class="glyph">X</i>Preferito</span></div></footer>`;
+
+/* switch + fit */
+const stage = document.getElementById('stage');
+const btns = [...document.querySelectorAll('.switch button')];
+function show(i) {
+  document.querySelectorAll('.mock').forEach((m, k) => m.classList.toggle('on', k === i));
+  btns.forEach((b, k) => b.setAttribute('aria-pressed', k === i));
+  try { localStorage.setItem('mock', i); } catch {}
+}
+btns.forEach(b => b.onclick = () => show(+b.dataset.i));
+addEventListener('keydown', e => {
+  const cur = btns.findIndex(b => b.getAttribute('aria-pressed') === 'true');
+  const n = btns.length;
+  if (/^[1-9]$/.test(e.key)) show(+e.key - 1);
+  if (e.key === 'ArrowRight') show((cur + 1) % n);
+  if (e.key === 'ArrowLeft') show((cur + n - 1) % n);
+});
+const fit = () => stage.style.transform = `scale(${Math.min(innerWidth / 1600, (innerHeight - 56) / 900)})`;
+addEventListener('resize', fit); fit();
+try { const s = localStorage.getItem('mock'); if (s) show(+s); } catch {}
+</script>
+</body>
+</html>

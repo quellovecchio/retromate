@@ -1,119 +1,421 @@
-/* RetroMate design system: "Vetrina". Every game is a physical box in a dim showroom, lit by a soft glow in the
-   hue of the console that has focus. Only games are objects: true 3D boxes (preserve-3d) at real packaging size.
-   Everything else is flat type and quiet cards. A camera flies between pages. DESIGN.md documents the rules. */
+/* RetroMate design system: "Rivista". A clean library on white paper with a games-magazine voice: each console is a
+   section with its own colour (a tab on every tile, a halftone panel behind the cover), titles are set heavy and
+   condensed, stats sit between thick rules, and the one action (yellow) stands on a hard black shadow. The in-game
+   menu keeps its own dark look (ingame.css). Skins swap the tokens below. DESIGN.md documents the rules. */
 
 @property --hue { syntax: '<number>'; inherits: true; initial-value: 292; }
 @property --bg-hue { syntax: '<number>'; inherits: false; initial-value: 292; }
 
 /* ---------- Tokens */
 :root {
-  /* Color. --hue is the console hue of whatever has focus (set by app.js). Surfaces are near-neutral and only
-     tinted by it; full console color appears in small doses (console labels, the backdrop glow). */
+  /* --hue is the console hue of whatever has focus (app.js): the WebGL skins tint their backdrop with it. On paper
+     each console's colour comes from --bh, set on the element that belongs to it. */
   --hue: 292;
-  --ink: #fff;
-  --ink-2: rgb(255 255 255 / 0.8);
-  --ink-dark: #170d2e;
-  --go: #ffe14d;                       /* the one action color: pad glyphs, active field ring, logo */
-  --surface: rgb(255 255 255 / 0.06);
-  --surface-line: rgb(255 255 255 / 0.1);
-  --panel: oklch(0.21 0.02 var(--hue) / 0.7);
-  /* Focus: a dark gap, then white. Readable on every hue, never color alone (elements also move or straighten). */
-  --ring: 0 0 0 3px oklch(0.15 0.02 var(--hue)), 0 0 0 6px #fff;
-  /* Motion: ease for UI, spring only for physical objects settling (boxes, blocks, cards). */
+  --paper: #fafafa;                     /* the page */
+  --card: #fff;                         /* tiles, panels, cards */
+  --well: #f1f1f2;                      /* the grey well a cover stands in */
+  --ink: #0a0a0a;
+  --ink-2: #5c5c5c;                     /* secondary text, 6.4:1 on paper */
+  --line: #e3e3e3;                      /* hairlines */
+  --line-2: #cfcfcf;                    /* control outlines */
+  --hard: #0a0a0a;                      /* hard offset shadows and thick rules */
+  --go: #ffe14d;                        /* the one action colour */
+  --go-ink: #0a0a0a;
+  --ink-dark: #0a0a0a;                  /* text on yellow (ingame.css and older rules use this name) */
+  --surface: var(--card);
+  --surface-line: var(--line);
+  --panel: var(--card);
+  /* A console's section colour: on panels (white text never sits on the light one) and on bands with text. */
+  --sec: oklch(0.62 0.2 var(--bh, var(--hue)));
+  --sec-deep: oklch(0.5 0.19 var(--bh, var(--hue)));
+  /* Focus: a gap in the paper, then ink; selected objects also lift onto a hard shadow (never colour alone). */
+  --ring: 0 0 0 3px var(--paper), 0 0 0 6px var(--ink);
+  --lift: -6px 6px 0 var(--hard);
+  /* Motion: ease for UI, spring only for objects settling (covers, fans, the starburst). */
   --ease: cubic-bezier(0.23, 1, 0.32, 1);
-  --spring: cubic-bezier(0.34, 1.32, 0.64, 1);  /* game boxes and fanned covers settling */
-  --settle: cubic-bezier(0.3, 1.12, 0.5, 1);   /* the selected cover-flow box: a smaller overshoot than --spring */
+  --spring: cubic-bezier(0.34, 1.32, 0.64, 1);
+  --settle: cubic-bezier(0.3, 1.12, 0.5, 1);
   /* Layout */
   --gutter: clamp(16px, 4vw, 56px);
-  --bar: 80px;                         /* the fixed top bar: focus scrolling keeps targets below it */
-  /* Gamepad keyboard (padtype.css) */
-  --daisy-bg: oklch(0.2 0.025 var(--hue));
-  --daisy-edge: oklch(0.12 0.02 var(--hue));
-  --daisy-petal: rgb(255 255 255 / 0.07);
-  --daisy-accent-bg: oklch(0.42 0.1 var(--hue));
+  --bar: 84px;                         /* the sticky top bar: focus scrolling keeps targets below it */
+  /* Gamepad keyboard (padtype.css): a black disc whatever the page */
+  --daisy-bg: #0a0a0a;
+  --daisy-edge: #000;
+  --daisy-petal: rgb(255 255 255 / 0.08);
+  --daisy-accent-bg: oklch(0.5 0.2 var(--hue));
   --daisy-font: var(--f-display);
-  color-scheme: dark;
+  color-scheme: light;
 }
 
-/* Type: five pairings, chosen in Opzioni (fonts.js sets data-fonts on <html>). Archivo's wide cut shares its family
-   with the body text. Each pairing sets the display face, its weight and width, and the body face. */
-[data-fonts] { --f-body: 'Archivo Variable', system-ui, sans-serif; --f-display: 'Archivo Variable', sans-serif; --fw-display: 900; --fs-display: 125%; --ls-display: 0; }
-[data-fonts='gabarito'] { --f-body: 'Gabarito Variable', system-ui, sans-serif; --f-display: 'Gabarito Variable', sans-serif; --fs-display: 100%; --ls-display: -0.01em; }
-[data-fonts='redhat'] { --f-body: 'Red Hat Text Variable', system-ui, sans-serif; --f-display: 'Red Hat Display Variable', sans-serif; --fs-display: 100%; --ls-display: -0.01em; }
-[data-fonts='funnel'] { --f-body: 'Funnel Sans Variable', system-ui, sans-serif; --f-display: 'Funnel Display Variable', sans-serif; --fw-display: 800; --fs-display: 100%; --ls-display: -0.01em; }
-[data-fonts='rubik'] { --f-body: 'Rubik Variable', system-ui, sans-serif; --f-display: 'Rubik Variable', sans-serif; --fw-display: 800; --fs-display: 100%; --ls-display: 0; }
+/* Custom properties resolve where they are declared: re-declare the section colours on every element that sets its
+   own console (--bh inline), so its children get that console's colour and not the root's. */
+:where([style*='--bh']) { --sec: oklch(0.62 0.2 var(--bh)); --sec-deep: oklch(0.5 0.19 var(--bh)); }
+
+/* Type: five pairings, chosen in Opzioni (fonts.js sets data-fonts on <html>). Archivo's condensed cut sets the
+   titles and its wide cut the logo, in the same family as the body text. */
+[data-fonts] { --f-body: 'Archivo Variable', system-ui, sans-serif; --f-display: 'Archivo Variable', sans-serif; --fw-display: 900; --fs-display: 75%; --ls-display: -0.015em; }
+[data-fonts='gabarito'] { --f-body: 'Gabarito Variable', system-ui, sans-serif; --f-display: 'Gabarito Variable', sans-serif; --fs-display: 100%; --ls-display: -0.02em; }
+[data-fonts='redhat'] { --f-body: 'Red Hat Text Variable', system-ui, sans-serif; --f-display: 'Red Hat Display Variable', sans-serif; --fs-display: 100%; --ls-display: -0.02em; }
+[data-fonts='funnel'] { --f-body: 'Funnel Sans Variable', system-ui, sans-serif; --f-display: 'Funnel Display Variable', sans-serif; --fw-display: 800; --fs-display: 100%; --ls-display: -0.02em; }
+[data-fonts='rubik'] { --f-body: 'Rubik Variable', system-ui, sans-serif; --f-display: 'Rubik Variable', sans-serif; --fw-display: 800; --fs-display: 100%; --ls-display: -0.01em; }
 
 /* ---------- Base */
 * { box-sizing: border-box; }
-/* Phones: no tap flash, no font inflation, no pull-to-refresh fighting the app; content clears the notch. Clipping
-   on html too: on mobile, content overflowing sideways (the cover flow's outer boxes) widens the layout viewport
-   even when body clips it. */
-html { background: oklch(0.13 0.02 var(--hue)); -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; overscroll-behavior: none; overflow-x: clip; scrollbar-gutter: stable; scroll-padding-top: calc(var(--bar) + env(safe-area-inset-top, 0px)); }
+/* Phones: no tap flash, no font inflation, no pull-to-refresh fighting the app; content clears the notch. */
+html { background: var(--paper); -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%; overscroll-behavior: none; overflow-x: clip; scrollbar-gutter: stable; scroll-padding-top: calc(var(--bar) + env(safe-area-inset-top, 0px)); }
 /* No visible scrollbars anywhere: pages still scroll with wheel, touch and focus moves. */
 * { scrollbar-width: none; }
 ::-webkit-scrollbar { display: none; } /* Safari before 18.2 */
 body {
   margin: 0; min-height: 100dvh; overflow-x: clip;
-  padding: env(safe-area-inset-top, 0px) max(var(--gutter), env(safe-area-inset-right, 0px)) 140px max(var(--gutter), env(safe-area-inset-left, 0px));
-  color: var(--ink); font-family: var(--f-body); font-size: 1.0625rem;
+  padding: env(safe-area-inset-top, 0px) max(var(--gutter), env(safe-area-inset-right, 0px)) 120px max(var(--gutter), env(safe-area-inset-left, 0px));
+  color: var(--ink); font-family: var(--f-body); font-size: 1.0625rem; caret-color: var(--ink);
 }
 h1, h2, h3, p { margin: 0; }
 a, button { color: inherit; text-decoration: none; outline: none; touch-action: manipulation; }
-/* Controls are not content: a long press on a box or a pill must not select its label. */
-:is(.nav a, .logo, .console, .boxcard, .flow-item, .font-pick, .toggle, .choice, .retry, .hints, .game-play, .state, .modal-close) { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-::selection { background: var(--go); color: var(--ink-dark); }
+/* Controls are not content: a long press on a tile or a pill must not select its label. */
+:is(.nav a, .logo, .console, .boxcard, .chip, .font-pick, .toggle, .choice, .retry, .hints, .game-play, .game-play-alt, .state, .modal-close) { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+::selection { background: var(--go); color: var(--go-ink); }
 :where(a[href], button, input):focus { box-shadow: var(--ring); }
 /* Forced colors drop box-shadows: give focus a real outline there. */
 @media (forced-colors: active) { :focus { outline: 3px solid CanvasText; outline-offset: 3px; } }
 :where(a[href], button, input) { scroll-margin-block: 120px; }
 [hidden] { display: none !important; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+/* Halftone: the printed dot screen over a section colour (hero, showcase, console band). */
+.halftone { position: relative; isolation: isolate; }
+.halftone::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; background-image: radial-gradient(rgb(0 0 0 / 0.16) 1.4px, transparent 1.6px); background-size: 9px 9px; }
 
-/* The showroom: dark and nearly neutral, with one soft glow in the hue of what has focus */
-.backdrop {
-  --bg-hue: var(--hue); /* the only place the hue animates: a non-inherited copy, so the rest of the page never recalculates per frame */
-  position: fixed; inset: 0; z-index: -1; transition: --bg-hue 800ms ease;
-  background:
-    radial-gradient(55% 42% at 50% 26%, oklch(0.42 0.11 var(--bg-hue) / 0.55), transparent 72%),
-    linear-gradient(180deg, oklch(0.2 0.03 var(--bg-hue)), oklch(0.13 0.02 var(--bg-hue)));
-}
+/* Plain paper; a skin's WebGL backdrop draws into it. */
+.backdrop { --bg-hue: var(--hue); position: fixed; inset: 0; z-index: -1; background: var(--paper); transition: --bg-hue 800ms ease; }
 
-/* ---------- Top bar: logo, the tabs in the middle (LB/RB switch them), clock and controller state */
+/* ---------- Top bar: logo and issue, the tabs (LB/RB switch them), clock and controller state, over a thick rule */
 .top {
   position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 24px; height: var(--bar);
 }
-/* The bar's veil runs edge to edge (past the gutters) and up under the notch; content scrolls beneath it. */
 .top::before {
-  content: ''; position: absolute; z-index: -1; inset: calc(-1 * env(safe-area-inset-top, 0px)) calc(50% - 50vw) 0; /* exactly the viewport's width: wider would make the page scroll sideways */
-  background: oklch(0.13 0.02 var(--hue) / 0.8); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  content: ''; position: absolute; z-index: -1; inset: calc(-1 * env(safe-area-inset-top, 0px)) calc(50% - 50vw) 0; /* exactly the viewport's width */
+  background: var(--paper); box-shadow: inset 0 -2px 0 var(--hard);
 }
-.logo { justify-self: start; display: inline-flex; font-size: 1.35rem; }
-.logo span:last-child { margin-left: 4px; padding: 0 8px; border-radius: 6px; background: var(--go); color: var(--ink-dark); }
-.nav { display: flex; align-items: center; gap: 6px; }
-.nav .pad-btn { margin: 0 6px; }
+.brand { justify-self: start; display: flex; align-items: center; gap: 18px; min-width: 0; }
+.logo { display: inline-flex; align-items: center; font-size: 1.75rem; line-height: 1; }
+.logo span:last-child { margin-left: 4px; padding: 2px 7px 3px; background: var(--go); color: var(--go-ink); box-shadow: -3px 3px 0 var(--hard); }
+.issue { font-size: 0.75rem; font-weight: 700; line-height: 1.3; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; }
+.nav { display: flex; align-items: center; gap: 4px; }
+.nav .pad-btn { margin: 0 8px; }
 :root:not([data-input='pad']) .nav .pad-btn { visibility: hidden; }
 .nav a {
-  display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 18px; border-radius: 999px;
-  font-weight: 700; background: rgb(255 255 255 / 0.1); transition: background-color 150ms ease, transform 160ms var(--ease);
+  position: relative; display: inline-flex; align-items: center; gap: 8px; height: 48px; padding: 0 16px; border-radius: 10px;
+  font-weight: 700; color: var(--ink-2); transition: color 150ms ease, transform 160ms var(--ease);
 }
+.nav a::after { content: ''; position: absolute; left: 16px; right: 16px; bottom: 2px; height: 4px; background: var(--ink); scale: 0 1; transition: scale 220ms var(--ease); }
 .nav a:active { transform: scale(0.97); }
 .nav a i { font-size: 1.25rem; }
-.nav a[aria-current] { background: #fff; color: var(--ink-dark); }
+.nav a[aria-current] { color: var(--ink); }
+.nav a[aria-current]::after { scale: 1 1; }
+@media (hover: hover) and (pointer: fine) { .nav a:hover { color: var(--ink); } }
 .status { justify-self: end; display: inline-flex; align-items: center; gap: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.pad-state { display: inline-flex; font-size: 1.5rem; opacity: 0.5; }
-.pad-state[data-on] { opacity: 1; color: var(--go); }
+.pad-state { display: inline-flex; font-size: 1.5rem; opacity: 0.35; }
+.pad-state[data-on] { opacity: 1; }
 
 .scene { view-transition-name: scene; }
-.page-title { margin-top: 24px; font-size: clamp(2rem, 4vw, 3rem); }
-.badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 999px; background: rgb(0 0 0 / 0.35); font-size: 0.8rem; font-weight: 700; }
+.page-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; margin-top: 32px; }
+.page-title { font-size: clamp(2.6rem, 5vw, 4rem); line-height: 0.95; }
+.page-sub { font-weight: 600; color: var(--ink-2); }
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 4px; background: var(--go); color: var(--go-ink); font-size: 0.72rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; }
+/* A black label tag: the console a cover story or card belongs to. */
+.kick { display: inline-flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--ink); color: var(--paper); font-size: 0.8rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+.kick b { color: oklch(0.84 0.13 var(--bh, var(--hue))); }
 
-/* ---------- Cover art (inside boxes, fans): image over a title fallback for missing box art */
+/* ---------- Covers. A flat cover keeps its own shape; without art it is a printed card in the console's colour. */
+.art { position: relative; display: inline-grid; grid-template-rows: 100%; }
+.art img { display: block; height: 100%; width: auto; }
+.art .cover-fallback { display: grid; align-content: center; gap: 8px; aspect-ratio: 3 / 4; height: 100%; padding: 12%; background: var(--sec-deep); color: #fff; text-align: left; font-size: 1.1rem; line-height: 1.05; overflow-wrap: anywhere; }
+.art:has(img) .cover-fallback { display: none; }
+.cover-band { font-family: var(--f-body); font-weight: 800; font-stretch: 100%; font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85; }
+/* A cover set like a magazine photo: tilted, a white border and a hard shadow. */
+.art-print { rotate: 4deg; border: clamp(5px, 0.6vw, 8px) solid #fff; box-shadow: -12px 12px 0 var(--hard); }
+/* The older .cover (fan cards, the in-game menu's boxes) */
 .cover { position: relative; display: grid; place-items: center; overflow: hidden; text-align: center; }
 .cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .cover-fallback { padding: 10px; font-size: 0.8rem; line-height: 1.2; overflow-wrap: anywhere; }
 
-/* ---------- Box: six faces at the console's real proportions (--ar = w/h, --d = depth/h, from app.js) */
+/* ---------- Buttons: one yellow action on a hard shadow, plain outlined secondaries */
+.game-play, .retry {
+  display: inline-flex; align-items: center; gap: 12px; height: 58px; padding: 0 26px 0 12px; border: 0; border-radius: 12px; cursor: pointer;
+  font: inherit; font-size: 1.2rem; font-weight: 800; background: var(--go); color: var(--go-ink);
+  box-shadow: 0 0 0 2px var(--hard), var(--lift); transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+.retry { padding: 0 26px; margin-top: 14px; }
+.game-play .pad-btn { width: 34px; height: 34px; background: var(--go-ink); color: var(--go); }
+.game-play:focus, .retry:focus { box-shadow: 0 0 0 2px var(--hard), var(--lift), var(--ring); }
+.game-play:active, .retry:active { transform: translate(-4px, 4px); box-shadow: 0 0 0 2px var(--hard), -2px 2px 0 var(--hard); }
+.game-play-alt {
+  display: inline-flex; align-items: center; gap: 10px; height: 58px; padding: 0 20px; border-radius: 12px; font-weight: 700;
+  background: var(--card); box-shadow: inset 0 0 0 1px var(--line-2); transition: transform 160ms var(--ease);
+}
+.game-play-alt:focus { box-shadow: inset 0 0 0 2px var(--ink), var(--ring); }
+.game-play-alt:active { transform: scale(0.97); }
+.btns { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+
+/* ---------- Home: the cover story (the last game played) */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(24px, 4vw, 56px); align-items: center; margin-top: 32px; }
+.hero-title { margin: 18px 0 26px; max-width: 15ch; font-size: clamp(2.4rem, 4.8vw, 4.1rem); line-height: 0.96; overflow-wrap: anywhere; text-wrap: balance; }
+.stats { display: flex; flex-wrap: wrap; gap: 14px 0; margin-bottom: 30px; }
+.stats > div { padding-right: 24px; margin-right: 24px; border-right: 2px solid var(--ink); }
+.stats > div:last-child { border: 0; margin-right: 0; padding-right: 0; }
+.stats b { display: block; font-size: clamp(1.9rem, 3vw, 2.6rem); line-height: 1; font-variant-numeric: tabular-nums; }
+.stats span { font-size: 0.92rem; font-weight: 600; color: var(--ink-2); }
+.hero-art { display: grid; grid-template-rows: 100%; place-items: center; height: clamp(300px, 46vh, 460px); border-radius: 20px; background: var(--sec); overflow: hidden; }
+.hero-art .art { height: 74%; }
+.hero-art .art-print { animation: drop-in 700ms var(--spring) both; }
+@keyframes drop-in { from { translate: 0 -24px; rotate: -6deg; opacity: 0; } }
+.burst {
+  position: absolute; right: 6%; top: 7%; display: grid; place-items: center; width: clamp(110px, 10vw, 150px); aspect-ratio: 1;
+  background: var(--go); color: var(--go-ink); text-align: center; line-height: 0.95; text-transform: uppercase; font-size: clamp(0.95rem, 1.2vw, 1.2rem); rotate: -12deg;
+  clip-path: polygon(50% 0,59% 13%,74% 5%,76% 21%,92% 19%,86% 34%,100% 42%,88% 52%,98% 66%,82% 70%,84% 86%,68% 82%,60% 98%,50% 86%,40% 98%,32% 82%,16% 86%,18% 70%,2% 66%,12% 52%,0 42%,14% 34%,8% 19%,24% 21%,26% 5%,41% 13%);
+  animation: burst-in 600ms var(--spring) 250ms both;
+}
+.burst b { display: block; font-size: 1.9em; }
+@keyframes burst-in { from { scale: 0.4; rotate: -40deg; opacity: 0; } }
+.pg { position: absolute; left: 20px; bottom: 16px; padding: 4px 9px; background: var(--hard); color: #fff; font-size: 1.05rem; letter-spacing: 0.02em; }
+
+/* ---------- Shelves of tiles (recently played, favorites, a console's games, search results) */
+.shelf { margin-top: 44px; }
+.shelf-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 20px; margin-bottom: 16px; }
+.shelf-title { font-size: clamp(1.5rem, 2.2vw, 1.9rem); line-height: 1; }
+.shelf-note, .results-count { font-weight: 600; color: var(--ink-2); }
+.covers { display: grid; grid-template-columns: repeat(auto-fill, minmax(172px, 1fr)); gap: 18px 16px; align-content: start; }
+/* A tile: the console's tab on top, the cover in a well, title and play time. content-visibility skips tiles off
+   screen, so a 2,500-game console scrolls smoothly. */
+.boxcard {
+  position: relative; display: grid; align-content: start; padding: 0 12px 12px; border-radius: 14px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line);
+  content-visibility: auto; contain-intrinsic-size: auto 270px; transition: transform 220ms var(--ease), box-shadow 220ms var(--ease);
+}
+.boxcard::before { content: ''; height: 6px; margin: 0 -12px 12px; border-radius: 14px 14px 0 0; background: var(--sec); }
+.well { display: grid; place-items: center; height: 158px; padding: 10px; border-radius: 8px; background: var(--well); }
+.well .art { height: 138px; max-width: 100%; }
+.well .art img { height: auto; max-height: 138px; max-width: 100%; margin: auto; align-self: center; }
+.well .cover-fallback { height: 138px; font-size: 0.85rem; }
+.boxcard-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 10px; min-height: 2.5em; font-size: 0.95rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.boxcard-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; font-size: 0.8rem; font-weight: 600; color: var(--ink-2); }
+.boxcard-meta b { color: var(--ink); font-weight: 800; }
+.boxcard[data-fav]::after { content: '★'; position: absolute; top: 14px; right: 6px; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--go); color: var(--go-ink); font-size: 0.85rem; box-shadow: 0 0 0 2px var(--hard); }
+.boxcard:focus { transform: translate(4px, -4px); box-shadow: inset 0 0 0 2px var(--ink), -8px 8px 0 var(--hard); }
+.boxcard:active { transform: translate(0, 0) scale(0.98); }
+@media (hover: hover) and (pointer: fine) { .boxcard:hover { box-shadow: inset 0 0 0 1px var(--line-2), -4px 4px 0 var(--line); } }
+
+/* ---------- Sommario: the consoles as chips (Home) */
+.toc { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 44px; }
+.toc-title { margin-right: 6px; font-size: 1.25rem; text-transform: uppercase; }
+.chip {
+  display: inline-flex; align-items: center; gap: 10px; height: 46px; padding: 0 16px 0 0; border-radius: 10px; overflow: hidden;
+  background: var(--card); box-shadow: inset 0 0 0 1px var(--line-2); font-weight: 600; color: var(--ink-2); transition: transform 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.chip::before { content: ''; align-self: stretch; width: 7px; background: var(--sec); }
+.chip b { font-size: 1.3rem; color: var(--ink); }
+.chip:focus { transform: translate(3px, -3px); box-shadow: inset 0 0 0 2px var(--ink), -6px 6px 0 var(--hard); }
+
+/* ---------- Loading, empty and error states */
+.loading { margin-top: 30vh; text-align: center; font-weight: 700; color: var(--ink-2); animation: breathe 1.2s ease-in-out infinite alternate; }
+@keyframes breathe { from { opacity: 0.45; } }
+.empty {
+  display: grid; justify-items: center; gap: 6px; max-width: 520px; margin: 48px auto 0; padding: 32px 24px;
+  border: 2px dashed var(--line-2); border-radius: 20px; text-align: center;
+}
+.empty i { font-size: 44px; margin-bottom: 6px; }
+.empty p:first-of-type { font-weight: 700; font-size: 1.15rem; }
+.empty p + p { color: var(--ink-2); }
+.empty code { font-size: 0.95em; }
+
+/* ---------- Libreria: the Sommario full size. Each console is a card with its tab, monogram and section page; its
+   first covers stand in the corner and fan out when it has focus. */
+.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 22px; padding: 4px 0 40px; }
+.console {
+  position: relative; display: grid; align-content: start; gap: 2px; min-height: 196px; padding: 0 20px 20px; border-radius: 16px; overflow: hidden;
+  background: var(--card); box-shadow: inset 0 0 0 1px var(--line); transition: transform 220ms var(--ease), box-shadow 220ms var(--ease);
+}
+.console::before { content: ''; height: 8px; margin: 0 -20px 16px; background: var(--sec); }
+.console-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.console-short { font-size: 3.6rem; line-height: 0.9; }
+.console-pg { font-weight: 800; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+.console-name { margin-top: 10px; max-width: 58%; font-size: 1.1rem; font-weight: 700; line-height: 1.2; }
+.console-count { font-size: 0.95rem; font-weight: 600; color: var(--ink-2); }
+a.console:focus { transform: translate(4px, -4px); box-shadow: inset 0 0 0 2px var(--ink), -8px 8px 0 var(--hard); }
+a.console:active { transform: scale(0.98); }
+@media (hover: hover) and (pointer: fine) { a.console:hover { box-shadow: inset 0 0 0 1px var(--line-2), -4px 4px 0 var(--line); } }
+.fan { position: absolute; right: 22px; bottom: 18px; width: 120px; height: 96px; pointer-events: none; }
+.fan-card {
+  position: absolute; right: 0; bottom: 0; width: 62px; aspect-ratio: 3 / 4; overflow: hidden; border: 3px solid #fff;
+  background: var(--sec-deep); box-shadow: -4px 4px 0 var(--hard); rotate: var(--r); translate: var(--fx) 0; transition: rotate 380ms var(--spring), translate 380ms var(--spring);
+}
+.fan-card .cover { position: absolute; inset: 0; }
+.fan-card .cover-fallback { font-size: 0.55rem; color: #fff; }
+.fan-card:nth-child(1) { --r: -10deg; --fx: -34px; }
+.fan-card:nth-child(2) { --r: -2deg; --fx: -17px; transition-delay: 30ms; }
+.fan-card:nth-child(3) { --r: 7deg; --fx: 0px; transition-delay: 60ms; }
+.console:focus .fan-card:nth-child(1) { --r: -18deg; --fx: -58px; }
+.console:focus .fan-card:nth-child(2) { --r: -4deg; --fx: -28px; }
+.console:focus .fan-card:nth-child(3) { --r: 12deg; --fx: 4px; }
+
+.search {
+  display: flex; align-items: center; gap: 12px; max-width: 560px; height: 58px; margin-top: 22px; padding: 0 18px;
+  border-radius: 12px; font-size: 1.1rem; background: var(--card); box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.search i { font-size: 1.4rem; }
+.search input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; outline: none; }
+.search input:focus { box-shadow: none; }
+.search input::placeholder { color: var(--ink-2); font-weight: 500; }
+/* Yellow says "type here". */
+.search:focus-within { box-shadow: inset 0 0 0 2px var(--ink), 0 0 0 3px var(--paper), 0 0 0 7px var(--go), 0 0 0 9px var(--hard); }
+.lib-results { display: grid; gap: 18px; margin-top: 28px; }
+.lib-sommario { margin-top: 36px; }
+
+/* ---------- Console page: its coloured section band, then the showcase beside the grid */
+.plat-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; column-gap: 24px; margin-top: 28px; padding: 22px 28px; border-radius: 20px; background: var(--sec-deep); color: #fff; }
+.plat-head .console-short { font-size: clamp(3rem, 6vw, 4.6rem); text-shadow: -4px 4px 0 var(--hard); }
+.plat-title { font-size: clamp(1.6rem, 3vw, 2.4rem); line-height: 1; }
+.plat-head .console-count { color: rgb(255 255 255 / 0.88); margin-top: 4px; }
+.plat-pg { align-self: start; padding: 4px 9px; background: var(--hard); color: #fff; font-weight: 800; font-size: 0.95rem; }
+.plat-body { display: grid; grid-template-columns: minmax(280px, 0.75fr) 2fr; gap: clamp(24px, 4vw, 56px); margin-top: 28px; }
+.plat-games { display: grid; gap: 18px; align-content: start; }
+.plat-games .search { margin-top: 0; }
+.showcase { position: sticky; top: calc(var(--bar) + 24px); align-self: start; display: grid; gap: 10px; }
+.showcase-stage { display: grid; grid-template-rows: 100%; place-items: center; height: clamp(240px, 42vh, 400px); border-radius: 18px; background: var(--sec); overflow: hidden; }
+.turntable { display: grid; grid-template-rows: 100%; place-items: center; height: 76%; }
+.turntable .art { height: 100%; }
+.showcase-title { margin-top: 8px; overflow-wrap: anywhere; font-size: clamp(1.5rem, 2.3vw, 2rem); line-height: 1; text-wrap: balance; min-height: 2em; }
+.showcase-meta { font-weight: 600; color: var(--ink-2); }
+.showcase-hint { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; }
+
+/* ---------- Options */
+.panel {
+  display: grid; gap: 18px; max-width: 1180px; margin-top: 22px; padding: 0 28px 28px; border-radius: 18px; overflow: hidden;
+  background: var(--card); box-shadow: inset 0 0 0 1px var(--line);
+}
+.panel::before { content: ''; height: 6px; margin: 0 -28px 6px; background: var(--hard); }
+.panel h2 { font-size: 1.7rem; line-height: 1; }
+.panel-note { margin-top: -10px; max-width: 75ch; color: var(--ink-2); }
+.font-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.font-pick {
+  display: grid; justify-items: start; gap: 4px; padding: 18px 20px; border: 0; border-radius: 14px; cursor: pointer;
+  font-family: var(--f-body); color: inherit; text-align: left; background: var(--card); box-shadow: inset 0 0 0 1px var(--line-2);
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+.font-pick:active { transform: scale(0.97); }
+.font-pick-display { font-family: var(--f-display); font-weight: var(--fw-display); font-stretch: var(--fs-display); letter-spacing: var(--ls-display); font-size: 1.9rem; line-height: 1.05; }
+.font-pick-body { font-weight: 700; }
+.font-pick-name { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--ink-2); }
+.font-pick-name i { display: none; font-size: 1.1rem; color: var(--ink); }
+.font-pick[aria-pressed='true'] { box-shadow: inset 0 0 0 2px var(--ink), -5px 5px 0 var(--hard); }
+.font-pick[aria-pressed='true'] .font-pick-name { color: var(--ink); font-weight: 700; }
+.font-pick[aria-pressed='true'] .font-pick-name i { display: inline; }
+.font-pick:focus { box-shadow: inset 0 0 0 2px var(--ink), var(--ring); }
+.font-pick[aria-pressed='true']:focus { box-shadow: inset 0 0 0 2px var(--ink), -5px 5px 0 var(--hard), var(--ring); }
+
+/* Choice pills: one of several values. The chosen one is solid ink, like the current tab's rule. */
+.choices { display: flex; flex-wrap: wrap; gap: 10px; }
+.choice {
+  height: 46px; padding: 0 18px; border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 700; color: inherit;
+  background: var(--card); box-shadow: inset 0 0 0 1px var(--line-2); transition: transform 160ms var(--ease);
+}
+.choice:active { transform: scale(0.97); }
+.choice[aria-pressed='true'] { background: var(--ink); color: var(--paper); box-shadow: none; }
+.choice:focus { box-shadow: inset 0 0 0 2px var(--ink), var(--ring); }
+.choice[aria-pressed='true']:focus { box-shadow: var(--ring); }
+
+/* A switch: label and current state on the left, a track on the right (yellow when on). */
+.toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 24px; max-width: 560px; padding: 16px 20px;
+  border: 0; border-radius: 14px; cursor: pointer; font: inherit; color: inherit; text-align: left; background: var(--card); box-shadow: inset 0 0 0 1px var(--line-2);
+  transition: transform 160ms var(--ease);
+}
+.toggle:active { transform: scale(0.98); }
+.toggle:focus { box-shadow: inset 0 0 0 2px var(--ink), var(--ring); }
+.toggle-text { display: grid; gap: 4px; }
+.toggle-title { font-weight: 700; }
+.toggle-note { font-size: 0.85rem; color: var(--ink-2); }
+.toggle-track { position: relative; flex: none; width: 54px; height: 30px; border-radius: 999px; background: var(--line-2); transition: background-color 150ms ease; }
+.toggle-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / 0.3); transition: translate 200ms var(--ease); }
+.toggle[aria-checked='true'] .toggle-track { background: var(--go); box-shadow: inset 0 0 0 2px var(--hard); }
+.toggle[aria-checked='true'] .toggle-track::after { translate: 24px 0; background: var(--hard); box-shadow: none; }
+
+/* ---------- Modal: a <dialog> over the dimmed page. The panel lifts in and drops away; the figure beside it (the
+   cover the opener carries in) doesn't fade, so it can fly in and out. */
+.modal {
+  display: flex; align-items: center; gap: clamp(28px, 4vw, 72px); max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px);
+  padding: 0; border: 0; overflow: visible; background: none; color: var(--ink);
+  transition: display 300ms allow-discrete, overlay 300ms allow-discrete;
+}
+.modal::backdrop {
+  background: color-mix(in srgb, var(--paper) 78%, transparent); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  transition: opacity 300ms ease, display 300ms allow-discrete, overlay 300ms allow-discrete;
+}
+.modal:not([open])::backdrop { opacity: 0; }
+@starting-style { .modal[open]::backdrop { opacity: 0; } }
+.modal-panel {
+  position: relative; display: grid; align-content: start; gap: 12px; width: min(580px, calc(100vw - 32px)); max-height: calc(100dvh - 32px);
+  overflow: auto; overscroll-behavior: contain; padding: 28px 32px 32px; border-radius: 20px;
+  background: var(--card); box-shadow: inset 0 0 0 2px var(--hard), -12px 12px 0 var(--hard);
+  transition: opacity 220ms ease, translate 300ms var(--ease), scale 300ms var(--ease);
+}
+.modal:not([open]) .modal-panel { opacity: 0; translate: 0 18px; scale: 0.97; }
+@starting-style { .modal[open] .modal-panel { opacity: 0; translate: 0 18px; scale: 0.97; } }
+.modal-figure { flex: none; transform-origin: top left; transition: opacity 200ms ease; }
+/* A landscape cover gets shorter instead of wider, so the card always fits beside it. */
+.modal-figure .art img { height: auto; max-height: min(380px, 52dvh); max-width: min(34vw, 440px); }
+.modal-figure .cover-fallback { height: min(380px, 52dvh); }
+.modal:not([open]) .modal-figure { opacity: 0; }
+.modal-close {
+  position: absolute; top: 16px; right: 16px; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 50%;
+  cursor: pointer; font-size: 1.3rem; color: inherit; background: var(--card); box-shadow: inset 0 0 0 1px var(--line-2); transition: transform 160ms var(--ease);
+}
+.modal-close:focus { box-shadow: inset 0 0 0 2px var(--ink), var(--ring); }
+.modal-close:active { transform: scale(0.94); }
+
+/* The game card (inside a modal) */
+.game-plat { justify-self: start; margin-right: 56px; }
+.game-title { margin-top: 6px; padding-right: 20px; overflow-wrap: anywhere; font-size: clamp(2rem, 3.4vw, 2.8rem); line-height: 0.98; text-wrap: balance; }
+.game-time { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ink-2); }
+.game-plays { display: flex; flex-wrap: wrap; gap: 12px 16px; margin: 10px 0 6px; }
+.game-states-title { margin-top: 16px; padding-top: 14px; border-top: 2px solid var(--ink); font-size: 1.3rem; }
+.game-states { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.game-note { grid-column: 1 / -1; color: var(--ink-2); }
+.state { display: grid; gap: 6px; padding: 8px 8px 10px; border-radius: 12px; font-size: 0.9rem; font-weight: 700; background: var(--card); box-shadow: inset 0 0 0 1px var(--line-2); transition: transform 200ms var(--ease); }
+.state:focus { transform: translate(3px, -3px); box-shadow: inset 0 0 0 2px var(--ink), -6px 6px 0 var(--hard); }
+.state img { image-rendering: pixelated; } /* state thumbnails are the console's own resolution */
+.state :is(img, .state-shot) { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 6px; background: var(--well); }
+
+/* ---------- Notice: a yellow sign hinged on the top edge */
+.notice {
+  position: fixed; inset: env(safe-area-inset-top, 0px) auto auto 50%; z-index: 10; overflow: visible; border: 2px solid var(--hard); border-top: 0; max-width: min(560px, calc(100vw - 32px));
+  margin: 0; padding: 16px 24px; border-radius: 0 0 14px 14px; translate: -50% 0; font-weight: 800;
+  background: var(--go); color: var(--go-ink); box-shadow: -6px 6px 0 var(--hard);
+  transform-origin: top center; transition: transform 460ms var(--spring), opacity 200ms ease;
+}
+@starting-style { .notice { transform: perspective(600px) rotateX(-90deg); opacity: 0; } }
+.notice.out { transform: perspective(600px) rotateX(-90deg); opacity: 0; transition: transform 200ms var(--ease), opacity 200ms ease; }
+
+/* ---------- Controller legend */
+.hints { /* a popover, so it can sit in the top layer above an open modal */
+  position: fixed; inset: auto var(--gutter) calc(24px + env(safe-area-inset-bottom, 0px)) auto; margin: 0; border: 0; color: var(--ink); display: flex; gap: 22px; padding: 9px 18px 9px 10px; border-radius: 999px;
+  font-weight: 700; font-size: 0.95rem; background: var(--card); box-shadow: inset 0 0 0 1px var(--line-2), 0 6px 20px rgb(0 0 0 / 0.08);
+}
+.hints span { display: inline-flex; align-items: center; gap: 8px; }
+.pad-btn { display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%; font-size: 0.8rem; font-weight: 800; background: var(--ink); color: var(--paper); }
+.hints > span:first-child .pad-btn { background: var(--go); color: var(--go-ink); box-shadow: 0 0 0 1.5px var(--hard); }
+.pad-btn-wide { width: auto; padding: 0 8px; border-radius: 8px; background: none; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--ink); }
+:root:not([data-input='pad']) .hints { opacity: 0.75; }
+
+/* ---------- Display face, last so it wins over the per-component sizes above */
+:is(h1, h2, h3, .logo, .hero-title, .page-title, .shelf-title, .toc-title, .console-short, .showcase-title, .stats b, .chip b, .pg, .burst, .plat-pg, .cover-fallback > span:last-child) {
+  font-family: var(--f-display); font-weight: var(--fw-display); font-stretch: var(--fs-display); letter-spacing: var(--ls-display);
+}
+.logo { font-stretch: 125%; letter-spacing: -0.02em; } /* Archivo's wide cut, the masthead */
+
+/* ---------- Box: six faces at the console's real proportions (--ar = w/h, --d = depth/h). The in-game menu shows
+   the game this way; the library uses flat covers. */
 .box3d {
   --h: 300px;
   --w: calc(var(--h) * var(--ar));
@@ -152,257 +454,6 @@ a, button { color: inherit; text-decoration: none; outline: none; touch-action: 
 .box3d[data-white] .front { background: #e9e9ee; }
 .box3d[data-white] :is(.side, .top, .bottom) { background: linear-gradient(90deg, #c9c9d1, #f6f6f9 50%, #c9c9d1); }
 
-/* ---------- Home: rows of boxes (recently played, favorites), each a cover flow */
-.row-title { margin-top: 20px; font-size: 1.1rem; color: var(--ink-2); }
-.flow { --fh: clamp(190px, 34vh, 330px); position: relative; display: flex; justify-content: center; gap: 4px; height: calc(var(--fh) + 80px); perspective: 1400px; perspective-origin: 50% 40%; margin-top: 12px; }
-.flow::before {
-  content: ''; position: absolute; left: 50%; bottom: 18px; width: min(560px, 80vw); height: 70px; translate: -50% 0;
-  background: radial-gradient(closest-side, rgb(255 255 255 / 0.16), transparent); filter: blur(6px);
-}
-/* Each link is a fixed 4px slot in order (what nav.js measures); only its .flow-vis moves. Focusing a slot scrolls
-   its whole row (title above, box and caption below) into view. */
-.flow-item { display: block; width: 4px; height: 4px; scroll-margin-block: 80px calc(var(--fh) + 200px); }
-.flow-item:focus { box-shadow: none; }
-.flow-vis {
-  position: absolute; left: 50%; top: 24px; height: var(--fh); display: grid; align-items: end; transform-style: preserve-3d; z-index: var(--zi);
-  transform: translateX(-50%) translateX(var(--x, 0px)) translateZ(var(--z, 0px)) rotateY(var(--ry, 0deg));
-  transition: transform 320ms var(--ease);
-}
-/* A landscape box (art wider than tall) is never wider than a square one: it gets shorter instead, standing on the shelf. */
-.flow-vis .box3d { --h: min(var(--fh), calc(var(--fh) / var(--ar))); }
-.flow-item[data-current] .flow-vis { transition: transform 420ms var(--settle); }
-.flow-item[data-current] .box3d { animation: sway 7s ease-in-out infinite; }
-.flow-item:focus[data-current] .box3d .front::before {
-  content: ''; position: absolute; inset: -6px; z-index: -1; border-radius: 4px; box-shadow: 0 0 0 3px #fff, 0 18px 50px rgb(10 0 40 / 0.45);
-}
-.flow-caption { display: grid; justify-items: center; gap: 6px; min-height: 120px; text-align: center; }
-.flow-plat { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; color: var(--ink-2); }
-.flow:has([data-current][data-fav]) + .flow-caption .flow-title::before, .boxcard[data-fav] .boxcard-title::before { content: '★ '; color: var(--go); }
-.flow-title {
-  max-width: 24ch; overflow-wrap: anywhere; font-size: clamp(1.6rem, 3.4vw, 2.6rem); line-height: 1.1; text-wrap: balance;
-}
-
-/* ---------- Loading, empty and error states */
-.loading { margin-top: 30vh; text-align: center; font-weight: 700; color: var(--ink-2); animation: breathe 1.2s ease-in-out infinite alternate; }
-@keyframes breathe { from { opacity: 0.45; } }
-.empty {
-  display: grid; justify-items: center; gap: 6px; max-width: 520px; margin: 48px auto 0; padding: 32px 24px;
-  border: 2px dashed rgb(255 255 255 / 0.3); border-radius: 20px; text-align: center;
-}
-.empty i { font-size: 44px; margin-bottom: 6px; }
-.empty p:first-of-type { font-weight: 700; font-size: 1.15rem; }
-.empty p + p { color: var(--ink-2); }
-.empty code { font-size: 0.95em; }
-.retry {
-  margin-top: 14px; height: 52px; padding: 0 26px; border: 0; border-radius: 14px; cursor: pointer;
-  font: inherit; font-weight: 800; background: var(--go); color: var(--ink-dark); transition: transform 160ms var(--ease);
-}
-.retry:active { transform: scale(0.97); }
-
-/* ---------- Consoles: quiet flat cards. The console's color is in the label and, on focus, a faint tint; its games
-   fan out of the top edge (games are the only objects). */
-.console {
-  position: relative; display: grid; align-content: end; gap: 2px; min-height: 150px; padding: 18px 20px; border-radius: 16px;
-  background: var(--surface); box-shadow: inset 0 0 0 1px var(--surface-line);
-  transition: transform 220ms var(--ease), background-color 220ms ease;
-}
-.console-short { font-size: 2.4rem; line-height: 1; color: oklch(0.8 0.12 var(--bh)); }
-.console-name { margin-top: 8px; font-size: 1.1rem; font-weight: 700; }
-.console-count { font-size: 0.95rem; color: var(--ink-2); }
-a.console:focus { transform: translateY(-4px); background: oklch(0.3 0.05 var(--bh) / 0.6); box-shadow: inset 0 0 0 1px oklch(0.8 0.12 var(--bh) / 0.45), var(--ring); }
-a.console:active { transform: scale(0.98); }
-@media (hover: hover) and (pointer: fine) { a.console:hover { background: rgb(255 255 255 / 0.09); } }
-
-.fan { position: absolute; left: -30px; right: -30px; bottom: 100%; height: 170px; overflow: hidden; pointer-events: none; }
-.fan-card {
-  position: absolute; left: 50%; bottom: 0; width: 92px; aspect-ratio: 3 / 4; margin-left: -46px; border-radius: 4px; overflow: hidden;
-  background: oklch(0.26 0.03 var(--bh)); box-shadow: 0 10px 20px rgb(0 0 0 / 0.35);
-  transform: translateY(calc(100% - 22px)); transform-origin: 50% 120%; transition: transform 360ms var(--spring);
-}
-.fan-card .cover { position: absolute; inset: 0; }
-.fan-card .cover-fallback { font-size: 0.6rem; }
-.fan-card:nth-child(1) { --r: -14deg; --fx: -70px; }
-.fan-card:nth-child(2) { --r: 0deg; --fx: 0px; transition-delay: 30ms; }
-.fan-card:nth-child(3) { --r: 14deg; --fx: 70px; transition-delay: 60ms; }
-.console:focus .fan-card { transform: translateX(var(--fx)) translateY(8px) rotate(var(--r)); }
-
-.strip-row { display: flex; flex-wrap: wrap; gap: 120px 34px; padding: 96px 0 0 2px; }
-.strip-row .console { flex: 0 0 220px; min-height: 130px; }
-.strip-row .fan { height: 118px; }
-.strip-row .fan-card { width: 70px; margin-left: -35px; }
-.strip-row .fan-card:nth-child(1) { --fx: -54px; }
-.strip-row .fan-card:nth-child(3) { --fx: 54px; }
-
-/* ---------- Library: search, then the consoles */
-.search {
-  display: flex; align-items: center; gap: 12px; max-width: 560px; height: 60px; margin-top: 20px; padding: 0 20px;
-  border-radius: 16px; font-size: 1.15rem; background: rgb(0 0 0 / 0.28);
-  box-shadow: inset 0 0 0 1px var(--surface-line);
-}
-.search i { font-size: 1.5rem; }
-.search input { flex: 1; min-width: 0; height: 100%; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; outline: none; }
-.search input:focus { box-shadow: none; }
-.search input::placeholder { color: rgb(255 255 255 / 0.85); font-weight: 400; }
-.search:focus-within { background: rgb(0 0 0 / 0.36); box-shadow: inset 0 0 0 2px #fff, 0 0 0 4px oklch(0.15 0.02 var(--hue)), 0 0 0 7px var(--go); }
-.lib-results { display: grid; gap: 18px; margin-top: 28px; }
-.results-count { font-weight: 700; color: var(--ink-2); }
-.lib-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 150px 28px; padding: 150px 0 40px; }
-.lib-grid .console { min-height: 180px; }
-.lib-grid .console-short { font-size: 3rem; }
-
-/* ---------- Console page: a type-only header, showcase box, grid of boxes */
-.plat-head { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 20px; margin-top: 24px; }
-.plat-head .console-short { grid-row: span 2; font-size: clamp(2.6rem, 5vw, 3.6rem); }
-.plat-title { font-size: clamp(1.5rem, 2.8vw, 2.2rem); line-height: 1.1; }
-.plat-body { display: grid; grid-template-columns: minmax(260px, 0.7fr) 2fr; gap: clamp(24px, 4vw, 64px); margin-top: 32px; }
-.plat-games { display: grid; gap: 18px; align-content: start; }
-.plat-games .search { margin-top: 0; }
-.showcase { position: sticky; top: calc(var(--bar) + 24px); align-self: start; display: grid; justify-items: center; gap: 10px; text-align: center; }
-.showcase-stage { --bh2: clamp(200px, 42vh, 380px); container-type: inline-size; position: relative; display: grid; place-items: center; width: 100%; height: calc(var(--bh2) + 70px); perspective: 1200px; }
-.showcase-stage::after {
-  content: ''; position: absolute; left: 50%; bottom: 6px; width: 70%; height: 46px; translate: -50% 0; z-index: -1;
-  background: radial-gradient(closest-side, rgb(10 0 40 / 0.55), transparent);
-}
-.turntable { transform-style: preserve-3d; animation: sway 8s ease-in-out infinite; }
-.turntable .box3d { --h: min(var(--bh2), calc(84cqw / var(--ar))); } /* a wide box never outgrows the column */
-.showcase-title { overflow-wrap: anywhere; font-size: clamp(1.3rem, 2.2vw, 1.9rem); line-height: 1.15; text-wrap: balance; max-width: 22ch; min-height: 2.3em; }
-.showcase-hint { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ink-2); }
-
-/* Boxes in a grid: turned slightly to show the spine at rest, squared up to face you when selected. */
-.covers { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 22px 18px; align-content: start; }
-/* content-visibility: the browser skips boxes off screen, so a 2,500-game console scrolls smoothly. It clips
-   paint to the card, which is why the focus ring is inset. */
-.boxcard {
-  display: grid; justify-items: center; align-content: start; gap: 4px; padding: 10px 0 14px; border-radius: 14px; text-align: center;
-  content-visibility: auto; contain-intrinsic-size: auto 270px;
-}
-.boxcard-stage { display: grid; place-items: end center; height: 196px; perspective: 900px; }
-.boxcard .box3d { --h: min(160px, calc(160px / var(--ar))); transform: rotateY(30deg) rotateX(10deg); transition: transform 340ms var(--spring); }
-.boxcard:focus .box3d { transform: rotateY(0deg) rotateX(0deg) scale(1.06); }
-@media (hover: hover) and (pointer: fine) { .boxcard:hover .box3d { transform: rotateY(0deg) rotateX(0deg) scale(1.06); } }
-.boxcard:focus { box-shadow: inset 0 0 0 3px #fff; }
-.boxcard-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin-top: 8px; padding: 0 8px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
-
-/* ---------- Options */
-.panel {
-  display: grid; gap: 18px; max-width: 1180px; margin-top: 28px; padding: 26px 28px 30px; border-radius: 20px;
-  background: var(--panel); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18);
-}
-.panel h2 { font-size: 1.3rem; }
-.panel-note { margin-top: -10px; color: var(--ink-2); }
-.font-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
-.font-pick {
-  display: grid; justify-items: start; gap: 4px; padding: 18px 20px; border: 0; border-radius: 16px; cursor: pointer;
-  font-family: var(--f-body); text-align: left; background: rgb(255 255 255 / 0.08);
-  transition: background-color 150ms ease, transform 160ms var(--ease);
-}
-.font-pick:active { transform: scale(0.97); }
-.font-pick-display { font-family: var(--f-display); font-weight: var(--fw-display); font-stretch: var(--fs-display); letter-spacing: var(--ls-display); font-size: 1.7rem; line-height: 1.1; } /* one line even in Archivo's wide cut */
-.font-pick-body { font-weight: 700; }
-.font-pick-name { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--ink-2); }
-.font-pick-name i { display: none; color: var(--go); font-size: 1.1rem; }
-.font-pick[aria-pressed='true'] { background: rgb(255 255 255 / 0.2); box-shadow: inset 0 0 0 2px var(--go); }
-.font-pick[aria-pressed='true'] .font-pick-name i { display: inline; }
-.font-pick:focus { box-shadow: var(--ring); }
-.font-pick[aria-pressed='true']:focus { box-shadow: inset 0 0 0 2px var(--go), var(--ring); }
-
-/* Choice pills: one of several values (Wii language). The chosen one is white, like the current tab. */
-.choices { display: flex; flex-wrap: wrap; gap: 10px; }
-.choice {
-  height: 46px; padding: 0 18px; border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 700;
-  background: rgb(255 255 255 / 0.08); transition: background-color 150ms ease, transform 160ms var(--ease);
-}
-.choice:active { transform: scale(0.97); }
-.choice[aria-pressed='true'] { background: #fff; color: var(--ink-dark); }
-
-/* A switch: label and current state on the left, a track on the right (yellow when on). */
-.toggle {
-  display: flex; align-items: center; justify-content: space-between; gap: 24px; max-width: 560px; padding: 18px 20px;
-  border: 0; border-radius: 16px; cursor: pointer; font: inherit; text-align: left; background: rgb(255 255 255 / 0.08);
-  transition: background-color 150ms ease, transform 160ms var(--ease);
-}
-.toggle:active { transform: scale(0.97); }
-.toggle-text { display: grid; gap: 4px; }
-.toggle-title { font-weight: 700; }
-.toggle-note { font-size: 0.85rem; color: var(--ink-2); }
-.toggle-track { position: relative; flex: none; width: 52px; height: 30px; border-radius: 999px; background: rgb(255 255 255 / 0.2); transition: background-color 150ms ease; }
-.toggle-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: translate 200ms var(--ease); }
-.toggle[aria-checked='true'] .toggle-track { background: var(--go); }
-.toggle[aria-checked='true'] .toggle-track::after { translate: 22px 0; background: var(--ink-dark); }
-
-/* ---------- Modal: a <dialog> over a dimmed, blurred set. The panel lifts in and drops away; the figure beside it
-   (an object the opener carries in, like a game box) doesn't fade, so it can fly in and out. */
-.modal {
-  display: flex; align-items: center; gap: clamp(24px, 4vw, 64px); max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px);
-  padding: 0; border: 0; overflow: visible; background: none; color: var(--ink);
-  transition: display 300ms allow-discrete, overlay 300ms allow-discrete;
-}
-.modal::backdrop {
-  background: oklch(0.1 0.02 var(--hue) / 0.72); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  transition: opacity 300ms ease, display 300ms allow-discrete, overlay 300ms allow-discrete;
-}
-.modal:not([open])::backdrop { opacity: 0; }
-@starting-style { .modal[open]::backdrop { opacity: 0; } }
-.modal-panel {
-  position: relative; display: grid; align-content: start; gap: 12px; width: min(560px, calc(100vw - 32px)); max-height: calc(100dvh - 32px);
-  overflow: auto; overscroll-behavior: contain; padding: 30px 32px 32px; border-radius: 20px;
-  background: oklch(0.21 0.025 var(--hue) / 0.94); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 30px 80px rgb(0 0 0 / 0.5);
-  transition: opacity 220ms ease, translate 300ms var(--ease), scale 300ms var(--ease);
-}
-.modal:not([open]) .modal-panel { opacity: 0; translate: 0 18px; scale: 0.97; }
-@starting-style { .modal[open] .modal-panel { opacity: 0; translate: 0 18px; scale: 0.97; } }
-.modal-figure { flex: none; transform-origin: top left; perspective: 1200px; transition: opacity 200ms ease; }
-.modal:not([open]) .modal-figure { opacity: 0; }
-.modal-figure .box3d { --h: min(340px, 52dvh, calc(300px / var(--ar))); animation: sway 8s ease-in-out infinite; }
-.modal-close {
-  position: absolute; top: 14px; right: 14px; display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 50%;
-  cursor: pointer; font-size: 1.3rem; background: rgb(255 255 255 / 0.1); transition: background-color 150ms ease, transform 160ms var(--ease);
-}
-.modal-close:active { transform: scale(0.94); }
-
-/* The game card (inside a modal) */
-.game-plat { display: inline-flex; align-items: center; gap: 10px; padding-right: 52px; font-weight: 700; color: var(--ink-2); }
-.game-title { padding-right: 40px; overflow-wrap: anywhere; font-size: clamp(1.6rem, 3vw, 2.4rem); line-height: 1.08; text-wrap: balance; }
-.game-time { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; color: var(--ink-2); }
-.game-play {
-  justify-self: start; display: inline-flex; align-items: center; gap: 10px; height: 56px; margin-top: 8px; padding: 0 30px; border-radius: 14px;
-  font-weight: 800; font-size: 1.15rem; background: var(--go); color: var(--ink-dark); transition: transform 160ms var(--ease);
-}
-.game-play:active { transform: scale(0.97); }
-.game-plays { display: flex; flex-wrap: wrap; gap: 0 12px; }
-.game-play-alt { background: rgb(255 255 255 / 0.1); color: var(--ink); } /* the console's in-browser core (PS2: Play!) */
-.game-states-title { margin-top: 14px; font-size: 1.1rem; }
-.game-states { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
-.game-note { grid-column: 1 / -1; color: var(--ink-2); }
-.state { display: grid; gap: 6px; padding: 8px 8px 10px; border-radius: 12px; font-size: 0.9rem; font-weight: 700; background: rgb(255 255 255 / 0.07); }
-.state img { image-rendering: pixelated; } /* state thumbnails are the console's own resolution */
-.state :is(img, .state-shot) { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 6px; background: rgb(0 0 0 / 0.35); }
-
-/* ---------- Notice: a hinged sign that drops from the top edge */
-.notice {
-  position: fixed; inset: env(safe-area-inset-top, 0px) auto auto 50%; z-index: 10; overflow: visible; border: 0; max-width: min(560px, calc(100vw - 32px));
-  margin: 0; padding: 16px 24px; border-radius: 0 0 16px 16px; translate: -50% 0; font-weight: 800;
-  background: var(--go); color: var(--ink-dark); box-shadow: 0 20px 40px rgb(0 0 0 / 0.4);
-  transform-origin: top center; transition: transform 460ms var(--spring), opacity 200ms ease;
-}
-@starting-style { .notice { transform: perspective(600px) rotateX(-90deg); opacity: 0; } }
-.notice.out { transform: perspective(600px) rotateX(-90deg); opacity: 0; transition: transform 200ms var(--ease), opacity 200ms ease; }
-
-/* ---------- Controller legend */
-.hints { /* a popover, so it can sit in the top layer above an open modal */
-  position: fixed; inset: auto var(--gutter) calc(28px + env(safe-area-inset-bottom, 0px)) auto; margin: 0; border: 0; color: var(--ink); display: flex; gap: 24px; padding: 10px 18px; border-radius: 999px;
-  font-weight: 700; font-size: 0.95rem; background: oklch(0.18 0.02 var(--hue) / 0.8); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-}
-.hints span { display: inline-flex; align-items: center; gap: 8px; }
-.pad-btn { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; font-size: 0.8rem; font-weight: 800; background: var(--go); color: var(--ink-dark); }
-.pad-btn-wide { width: auto; padding: 0 8px; border-radius: 8px; background: #fff; }
-.hints > span:not(:first-child) .pad-btn { background: #fff; }
-:root:not([data-input='pad']) .hints { opacity: 0.7; }
-
-/* ---------- Display face, last so it wins over the per-component sizes above */
-:is(h1, h2, h3, .logo, .flow-title, .game-title, .console-short, .showcase-title, .cover-fallback) {
-  font-family: var(--f-display); font-weight: var(--fw-display); font-stretch: var(--fs-display); letter-spacing: var(--ls-display);
-}
 
 /* ---------- Camera between pages (View Transitions): deeper flies forward through the old page, back pulls away.
    Also across documents: launching a game flies into it, returning pulls back out (app.js sets data-vt). */
@@ -434,6 +485,40 @@ body.play { height: 100dvh; padding: 0; overflow: hidden; background: #000; }
 .msg { position: fixed; inset: 0; display: grid; place-items: center; margin: 0; color: var(--ink-2); font-weight: 700; }
 .toast { position: fixed; top: 1rem; left: 50%; translate: -50%; margin: 0; padding: 0.5rem 1rem; border-radius: 999px; background: #000c; color: var(--ink); font-size: 0.85rem; }
 
+/* ---------- Play page: the game and its menu stay dark whatever the skin */
+body.play {
+  --paper: #0b0b0d; --card: rgb(255 255 255 / 0.06); --well: rgb(255 255 255 / 0.06);
+  --ink: #fff; --ink-2: rgb(255 255 255 / 0.8); --ink-dark: #170d2e; --go-ink: #170d2e;
+  --line: rgb(255 255 255 / 0.1); --line-2: rgb(255 255 255 / 0.2); --hard: #000;
+  --surface: rgb(255 255 255 / 0.06); --surface-line: rgb(255 255 255 / 0.1);
+  --ring: 0 0 0 3px oklch(0.15 0.02 var(--hue)), 0 0 0 6px #fff;
+  color-scheme: dark;
+}
+body.play .pad-btn[data-btn='ok'] { background: var(--go); color: var(--go-ink); }
+
+/* ---------- Night edition: every dark skin (a WebGL backdrop) prints the same pages in white ink on smoked cards.
+   The skin's own rules below add its chrome. */
+:root[data-chrome]:not([data-chrome~='light']) {
+  color-scheme: dark;
+  --paper: #090909;
+  --card: rgb(12 12 14 / 0.68);
+  --well: rgb(255 255 255 / 0.06);
+  --ink: #fff;
+  --ink-2: rgb(255 255 255 / 0.74);
+  --line: rgb(255 255 255 / 0.14);
+  --line-2: rgb(255 255 255 / 0.26);
+  --hard: #000;
+  --surface: var(--card);
+  --surface-line: var(--line);
+  --panel: var(--card);
+}
+:root[data-chrome]:not([data-chrome~='light']) .top::before { background: rgb(9 9 9 / 0.55); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: inset 0 -1px 0 var(--line-2); }
+:root[data-chrome]:not([data-chrome~='light']) :is(.boxcard, .console, .chip, .panel, .hints, .modal-panel, .toggle, .font-pick, .choice:not([aria-pressed='true']), .search, .state, .game-play-alt, .modal-close) { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+:root[data-chrome]:not([data-chrome~='light']) .modal-panel { box-shadow: inset 0 0 0 1px var(--line-2), -12px 12px 0 rgb(0 0 0 / 0.7); }
+:root[data-chrome]:not([data-chrome~='light']) .modal::backdrop { background: rgb(4 4 6 / 0.6); }
+:root[data-chrome]:not([data-chrome~='light']) .panel::before { background: var(--line-2); }
+:root[data-chrome]:not([data-chrome~='light']) .well { background: rgb(255 255 255 / 0.05); }
+
 /* ---------- Shader skins (skin.js, chosen in Opzioni): the set becomes a live WebGL2 backdrop. While it runs
    <html data-chrome> lists the chrome to apply: "glass" (smoked glass with a lit top edge, glowing focus, a light
    running round the focused console card), "light" (dark ink on a light page) and each skin's own extras.
@@ -452,7 +537,6 @@ body.play { height: 100dvh; padding: 0; overflow: hidden; background: #000; }
   background: #090909;
 }
 :root[data-chrome~='glass'] .top::before { background: rgb(9 9 9 / 0.5); }
-:root[data-chrome~='glass'] .page-title { background: linear-gradient(180deg, #fff 30%, rgb(255 255 255 / 0.55)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 /* Pills: smoked glass inside a lit gradient rim */
 :root[data-chrome~='glass'] :is(.nav a:not([aria-current]), .choice:not([aria-pressed='true']), .modal-close, .game-play-alt, .hints) {
   border: 1.5px solid transparent; background: linear-gradient(var(--glass), var(--glass)) padding-box, var(--edge) border-box;
@@ -661,23 +745,43 @@ body.play { height: 100dvh; padding: 0; overflow: hidden; background: #000; }
 :root[data-chrome~='neon'] :is(.nav a, .choice, .console, .toggle, .font-pick, .state, .game-play, .modal-close, .boxcard):focus { animation: neon-on 700ms linear; }
 @keyframes neon-on { 0%, 12%, 24%, 40% { opacity: 1; } 6%, 18%, 32% { opacity: 0.35; } }
 
-/* ---------- Reduced motion: no flying, swaying or springing; state changes stay instant and visible */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
-  @view-transition { navigation: none; }
-}
 
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; }
+  .hero-art { order: -1; height: clamp(240px, 38vh, 340px); }
+  .issue { display: none; }
+}
 @media (max-width: 760px) {
   :root { --bar: 112px; } /* logo, then the tabs on one line of their own */
-  .top { display: flex; height: auto; flex-wrap: wrap; gap: 12px; padding: 14px 0 8px; }
+  .top { display: flex; height: auto; flex-wrap: wrap; gap: 10px; padding: 14px 0 10px; }
   .nav .pad-btn { display: none; }
   .nav { width: 100%; }
   .nav a { flex: 1; justify-content: center; height: 44px; padding: 0 8px; }
-
+  .nav a::after { left: 8px; right: 8px; }
   .status, .hints { display: none; }
-  .modal { flex-direction: column; gap: 16px; }
-  .modal-figure .box3d { --h: min(170px, 26dvh, calc(150px / var(--ar))); }
+  .hero { margin-top: 20px; }
+  .hero-title { margin: 14px 0 20px; }
+  .stats > div { padding-right: 16px; margin-right: 16px; }
+  .covers { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 14px 12px; }
+  .well { height: 134px; }
+  .well .art img { max-height: 114px; }
+  .well .cover-fallback { height: 114px; }
+  .lib-grid { grid-template-columns: 1fr; }
+  .plat-head { grid-template-columns: auto 1fr; padding: 18px 20px; }
+  .plat-pg { display: none; }
+  .modal { flex-direction: column; gap: 18px; }
+  .modal-figure .art img { max-height: min(190px, 26dvh); max-width: 70vw; }
+  .modal-figure .cover-fallback { height: min(190px, 26dvh); }
   .plat-body { grid-template-columns: 1fr; }
   .showcase { display: none; } /* on a phone the grid is the page; the showcase only repeated the first game */
-  .lib-grid { gap: 160px 32px; }
+}
+
+/* Light skins print the cards from their own paper and ink. */
+:root[data-chrome~='light'] {
+  --card: color-mix(in srgb, var(--paper) 55%, #fff);
+  --well: color-mix(in srgb, var(--ink) 7%, transparent);
+  --line: color-mix(in srgb, var(--ink) 18%, transparent);
+  --line-2: color-mix(in srgb, var(--ink) 34%, transparent);
+  --hard: var(--ink);
+  --go-ink: var(--ink-dark);
 }
